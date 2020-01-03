@@ -1,5 +1,6 @@
 import copy
 import time
+import pickle
 import numpy as np
 import numpy.linalg as nla
 import scipy.integrate as si
@@ -229,7 +230,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
             print('Basis size: {}'.format(len(basis)))
 
         ### Compute the relevant quantities in the current basis.
-        [L_H, extended_basis] = lmatrix(basis, H, explored_com_data)
+        [L_H, extended_basis] = lmatrix(basis, H, explored_com_data, operation_mode='commutator')
         C_H = (L_H.H).dot(L_H)
         C_H = C_H.real
 
@@ -341,14 +342,13 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
                     'fidelities'            : fidelities,
                     'initial_fidelities'    : initial_fidelities,
                     'final_fidelities'      : final_fidelities,
-                    'proj_final_fidelities' : proj_final_fidelities,
-                    'explored_com_data'     : explored_com_data,
-                    'explored_anticom_data' : explored_anticom_data}
+                    'proj_final_fidelities' : proj_final_fidelities}
         
     # Save the results to a file if provided.
     if results_filename is not None:
+        data = [args, results_data]
         results_file = open(results_filename, 'wb')
-        pickle.dump(results_data, results_file)
+        pickle.dump(data, results_file)
         results_file.close()
 
     # The final optimized operator O.

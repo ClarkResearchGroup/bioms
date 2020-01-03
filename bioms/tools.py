@@ -194,6 +194,33 @@ def project(basis, op):
     return projected_op
 
 # TODO: document
+def lmatrix(basis, H, explored_data, operation_mode='commutator'):
+    """Build the Liouvillian matrix L_H (or anti-Liouvillian matrix
+    \\bar{L}_H) from the explored data.
+    
+    ...
+    """
+
+    [explored_basis, explored_extended_basis, explored_s_constants_data] = explored_data
+    
+    [l_matrix, extended_basis] = _explore(basis, H, explored_basis, explored_extended_basis, explored_s_constants_data, operation_mode=operation_mode)
+    
+    # For book-keeping indices in different bases.
+    inds_basis_to_x = np.array([explored_basis.index(b_os) for b_os in basis], dtype=int)
+    inds_x_to_basis = dict()
+    for ind_b in range(len(basis)):
+        inds_x_to_basis[inds_basis_to_x[ind_b]] = ind_b
+
+    inds_extended_basis_to_x = np.array([explored_extended_basis.index(eb_os) for eb_os in extended_basis], dtype=int)
+    inds_x_to_extended_basis = dict()
+    for ind_eb in range(len(extended_basis)):
+        inds_x_to_extended_basis[inds_extended_basis_to_x[ind_eb]] = ind_eb 
+
+    results = [l_matrix, extended_basis]
+            
+    return results
+
+# TODO: document
 def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_com_data):
     """Expand the basis by commuting with the Hamiltonian H.
     Compute [H, [H, \tau]] and add the OperatorStrings with the
@@ -232,33 +259,6 @@ def expand_anticom(anticom_residual, anticom_extended_basis, basis, dbasis):
             basis     += os
             num_added += 1
         ind_add += 1
-
-def lmatrix(basis, H, explored_data, operation_mode='commutator'):
-    """Build the Liouvillian matrix L_H (or anti-Liouvillian matrix
-    \\bar{L}_H) from the explored data.
-    
-    ...
-    """
-    
-    [explored_basis, explored_extended_basis, explored_s_constants_data] = explored_data
-    
-    [l_matrix, extended_basis] = _explore(basis, H, explored_basis, explored_extended_basis, explored_s_constants_data, operation_mode=operation_mode)
-    
-    # For book-keeping indices in different bases.
-    inds_basis_to_x = np.array([explored_basis.index(b_os) for b_os in basis], dtype=int)
-    inds_x_to_basis = dict()
-    for ind_b in range(len(basis)):
-        inds_x_to_basis[inds_basis_to_x[ind_b]] = ind_b
-
-    inds_extended_basis_to_x = np.array([explored_extended_basis.index(eb_os) for eb_os in extended_basis], dtype=int)
-    inds_x_to_extended_basis = dict()
-    for ind_eb in range(len(extended_basis)):
-        inds_x_to_extended_basis[inds_extended_basis_to_x[ind_eb]] = ind_eb 
-
-    results = [l_matrix, extended_basis]
-            
-    return results
-
 
 ### Extra miscellaneous tool functions.
 
