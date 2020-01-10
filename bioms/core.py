@@ -198,10 +198,12 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     com_norms  = []
     binarities = []
     taus       = []
+    tau_norms  = []
     def update_vars(y):
-        nonlocal com_norms, binarities, iteration_data
+        nonlocal com_norms, binarities, taus, tau_norms, iteration_data
         # Ensure that the nonlocal variables are updated properly.
         # Make sure that the vector is normalized here.
+        tau_norms.append(nla.norm(y))
         obj(y/nla.norm(y))
         com_norms.append(com_norm)
         binarities.append(binarity)
@@ -334,19 +336,32 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         print('Total time elapsed: {} seconds (or {} minutes or {} hours)'.format(end_run - start_run, (end_run - start_run)/60.0, (end_run - start_run)/3600.0))
 
     # Store the results in a dictionary.
-    results_data = {'taus'                  : taus,
-                    'basis_inds'            : basis_inds,
-                    'basis_sizes'           : basis_sizes,
-                    'com_norms'             : com_norms,
-                    'binarities'            : binarities,
-                    'fidelities'            : fidelities,
-                    'initial_fidelities'    : initial_fidelities,
-                    'final_fidelities'      : final_fidelities,
-                    'proj_final_fidelities' : proj_final_fidelities}
-        
+    results_data = {'taus'                       : taus,
+                    'tau_norms'                  : tau_norms,
+                    'basis_inds'                 : basis_inds,
+                    'basis_sizes'                : basis_sizes,
+                    'num_taus_in_expansion'      : num_taus_in_expansion,
+                    'ind_expansion_from_ind_tau' : ind_expansion_from_ind_tau,
+                    'com_norms'                  : com_norms,
+                    'binarities'                 : binarities,
+                    'fidelities'                 : fidelities,
+                    'initial_fidelities'         : initial_fidelities,
+                    'final_fidelities'           : final_fidelities,
+                    'proj_final_fidelities'      : proj_final_fidelities}
+    
+    
     # Save the results to a file if provided.
     if results_filename is not None:
-        data = [args, results_data]
+        # Record the input arguments in addition to the
+        # results, but do not store the saved commuation
+        # and anticommutation data, just the explored basis.
+        args_to_record = dict()
+        for key in args:
+            if key not in ['explored_com_data', 'explored_anticom_data']:
+                args_to_record[key] = args[key]
+        args_to_record['explored_basis'] = args['explored_com_data'][0]
+        
+        data = [args_to_record, results_data]
         results_file = open(results_filename, 'wb')
         pickle.dump(data, results_file)
         results_file.close()

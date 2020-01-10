@@ -41,6 +41,7 @@ input_file.close()
 # Read the run parameters that specify the Hamiltonians
 # to consider and the number of samples to try.
 L           = args['L'] 
+periodic    = args['periodic']
 Ws          = args['Ws']
 num_Ws      = len(Ws)
 num_samples = args['num_samples']
@@ -88,7 +89,7 @@ for ind_sample in range(num_samples):
         J_z  = 1.0
 
         # The Heisenberg chain.
-        H = bioms.xxz_chain(L, J_xy, J_z)
+        H = bioms.xxz_chain(L, J_xy, J_z, periodic=periodic)
         # Perturbing magnetic fields.
         H += bioms.magnetic_fields(W * random_potentials)
 

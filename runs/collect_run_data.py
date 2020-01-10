@@ -1,0 +1,187 @@
+"""
+Read data from find_lbit() runs, convert the data
+to a more compressed pandas DataFrame format that 
+can be more easily manipulated to generate plots, 
+and save the compressed format to file.
+"""
+
+
+import os
+import pickle
+import optparse
+import json
+import numpy as np
+import pandas as pd
+
+import qosy as qy
+
+from context import bioms
+from bioms.tools import get_size
+
+# Parse the input arguments.
+parser = optparse.OptionParser()
+parser.add_option('-I', '--input', type='str', dest='input_filename', help='Input file specifying the data to collect and analyze.')
+
+(options, args) = parser.parse_args()
+
+# The input filename.
+input_filename = options.input_filename
+
+# Read the input file.
+input_file = open(input_filename, 'r')
+input_args = json.load(input_file)
+input_file.close()
+
+# The folders to read data from.
+folders = input_args['folders']
+
+# The output filename to save the collected data to.
+output_filename = input_args['output_filename']
+
+# The parameters to NOT save to the pandas
+# DataFrame because they take up too much space
+# and/or are not necessary for making plots.
+params_to_ignore = ['explored_com_data', \
+                    'explored_anticom_data', \
+                    'explored_basis', \
+                    'taus', \
+                    'basis_inds', \
+                    'basis_sizes', \
+                    'com_norms', \
+                    'binarities', \
+                    'tau_norms', \
+                    'fidelities', \
+                    'initial_fidelities', \
+                    'final_fidelities', \
+                    'proj_final_fidelities', \
+                    'num_taus_in_expansion', \
+                    'ind_expansion_from_ind_tau']
+
+# Compute the "weight" of an operator,
+# the probability of each site being
+# a non-identity operator.
+def operator_weights(operator, num_orbitals):
+    weights = np.zeros(num_orbitals) + 1e-16
+    for (coeff, op_string) in operator:
+        for (op_name, orb_label) in op_string:
+            weights[orb_label] += np.abs(coeff)**2.0
+    
+    weights /= np.sum(weights)
+
+    return weights
+
+# Keep a list of dicts to transform into a pandas
+# DataFrame later.
+df_data = []
+
+# Loop through each saved file in the run folder.
+for folder in folders:
+    ind_file = 0
+    filename = folder + '/' + str(ind_file) + '.p'
+    # Read the file if it exists and is not corrupted.
+    while os.path.isfile(filename):
+        try:
+            datafile = open(filename, 'rb')
+            data = pickle.load(datafile)
+            datafile.close()
+        except:
+            # Could not successfully unpickle the file,
+            # probably because it was not fully written.
+            # Ignore it.
+            break
+
+        [args, results_data] = data
+
+        # Put the saved data into a dictionary.
+        data_dict = dict()
+        for key in args:
+            if key not in params_to_ignore:
+                data_dict[key] = args[key]
+        for key in results_data:
+            if key not in params_to_ignore:
+                data_dict[key] = results_data[key]
+
+        # Calculate additional quantities, such as
+        # the weights of the operators on different sites.
+        L              = args['L']
+        explored_basis = args['explored_basis']
+        
+        taus                       = results_data['taus']
+        num_taus_in_expansion      = results_data['num_taus_in_expansion']
+        ind_expansion_from_ind_tau = results_data['ind_expansion_from_ind_tau']
+        
+        num_taus = len(taus)
+        for ind_tau in range(num_taus):
+            # The dictionary to save this particular
+            # operator's info to.
+            tau_dict = dict()
+
+            # The expansion index.
+            ind_expansion = ind_expansion_from_ind_tau[ind_tau]
+            
+            coeffs              = taus[ind_tau]
+            inds_explored_basis = results_data['basis_inds'][ind_expansion]
+            op_strings          = [explored_basis[ind_os] for ind_os in inds_explored_basis]
+            operator            = qy.Operator(coeffs, op_strings)
+
+            # The weight of the operator on each site.
+            weights = operator_weights(operator, L)
+
+            # The histogram of the amplitudes of the operator on each operator string.
+            (coeff_hist, bin_edges) = np.histogram(-np.log(np.abs(coeffs)+1e-16)/np.log(10.0), bins = np.linspace(0.0, 16.0, 17))
+
+            # The fidelity of the operator with the previous operator.
+            fidelity            = np.nan
+            proj_final_fidelity = np.nan
+            if ind_tau > 0:
+                fidelity            = results_data['fidelities'][ind_tau - 1]
+                proj_final_fidelity = results_data['proj_final_fidelities'][ind_tau - 1]
+                
+            #plt.plot(bin_edges[0:16], coeff_hist, label='W={}'.format(Ws[indWs]))
+            #print(coeff_hist)
+            #plt.legend()
+            #plt.show()
+            
+            # The results to save to the Pandas data frame.
+            tau_dict = {
+                'com_norm'            : results_data['com_norms'][ind_tau], \
+                'binarity'            : results_data['binarities'][ind_tau], \
+                'tau_norm'            : results_data['tau_norms'][ind_tau], \
+                'fidelity'            : fidelity, \
+                'initial_fidelity'    : results_data['initial_fidelities'][ind_tau], \
+                'final_fidelity'      : results_data['final_fidelities'][ind_tau], \
+                'proj_final_fidelity' : proj_final_fidelity, \
+                'basis_size'          : results_data['basis_sizes'][ind_expansion], \
+                'weights'             : weights, \
+                'coeff_hist'          : coeff_hist, \
+                'ind_tau'             : ind_tau, \
+                'ind_expansion'       : ind_expansion, \
+                'num_taus'            : num_taus
+            }
+            for key in data_dict:
+                tau_dict[key] = data_dict[key]
+
+
+            # DEBUGGING: Analyze size of tau_dict
+            #print('==== TAU {}, {} ===='.format(ind_file, ind_tau))
+            #for key in tau_dict:
+            #    print('{} : {} GB'.format(key, get_size(tau_dict[key])/1e9))
+
+            #exit(1)
+                
+            # Add the dictionary for the current operator
+            # to the list of dictionaries.
+            df_data.append(tau_dict)
+            
+        print(' Finished collecting data from {}'.format(filename))
+                
+        ind_file += 1
+        filename = folder + '/' + str(ind_file) + '.p'
+        
+    print('Finished collecting data from {}'.format(folder))
+
+# Create a pandas DataFrame.
+df = pd.DataFrame(df_data)
+    
+# Pickle the pandas DataFrame.
+df.to_pickle(output_filename)
