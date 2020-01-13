@@ -11,6 +11,7 @@ import pickle
 import optparse
 import json
 import numpy as np
+import scipy.optimize as so
 import pandas as pd
 
 import qosy as qy
@@ -70,6 +71,28 @@ def operator_weights(operator, num_orbitals):
 
     return weights
 
+# Performs an exponential fit
+# for the weights of the 1D lbit.
+def exp_fit(weights):
+    # Assumes a 1D chain.
+    x  = np.arange(len(weights))
+    y  = weights
+    
+    ind0 = np.argmax(weights)
+    x0   = x[ind0]
+    
+    # The exponential function to fit.
+    def func(x, a, b):
+        return b * np.exp(-np.abs(x - x0) / a)
+
+    # TODO: write jacobian
+    #def jac_func(x, a, b):
+    #    return np.array()
+    
+    popt, pcov = so.curve_fit(func, x, y)
+    
+    return [popt, pcov]
+    
 # Keep a list of dicts to transform into a pandas
 # DataFrame later.
 df_data = []
@@ -127,6 +150,11 @@ for folder in folders:
             # The weight of the operator on each site.
             weights = operator_weights(operator, L)
 
+            # Find an exponential fit of the weights.
+            [opt_params, opt_covs] = exp_fit(weights)
+            corr_length     = opt_params[0]
+            corr_length_err = np.sqrt(np.abs(opt_covs[0,0])) 
+            
             # The histogram of the amplitudes of the operator on each operator string.
             (coeff_hist, bin_edges) = np.histogram(-np.log(np.abs(coeffs)+1e-16)/np.log(10.0), bins = np.linspace(0.0, 16.0, 17))
 
@@ -142,21 +170,33 @@ for folder in folders:
             #plt.legend()
             #plt.show()
             
+            # Report whether this operator is the final
+            # optimized one in the current expansion.
+            is_final_expanded_tau = (ind_tau == num_taus - 1) or (ind_expansion_from_ind_tau[ind_tau] + 1 == ind_expansion_from_ind_tau[ind_tau + 1])
+            
+            # Report whether this operator is the final
+            # optimized one or not.
+            is_final_tau = (ind_tau == num_taus - 1)
+            
             # The results to save to the Pandas data frame.
             tau_dict = {
-                'com_norm'            : results_data['com_norms'][ind_tau], \
-                'binarity'            : results_data['binarities'][ind_tau], \
-                'tau_norm'            : results_data['tau_norms'][ind_tau], \
-                'fidelity'            : fidelity, \
-                'initial_fidelity'    : results_data['initial_fidelities'][ind_tau], \
-                'final_fidelity'      : results_data['final_fidelities'][ind_tau], \
-                'proj_final_fidelity' : proj_final_fidelity, \
-                'basis_size'          : results_data['basis_sizes'][ind_expansion], \
-                'weights'             : weights, \
-                'coeff_hist'          : coeff_hist, \
-                'ind_tau'             : ind_tau, \
-                'ind_expansion'       : ind_expansion, \
-                'num_taus'            : num_taus
+                'com_norm'              : results_data['com_norms'][ind_tau], \
+                'binarity'              : results_data['binarities'][ind_tau], \
+                'tau_norm'              : results_data['tau_norms'][ind_tau], \
+                'fidelity'              : fidelity, \
+                'initial_fidelity'      : results_data['initial_fidelities'][ind_tau], \
+                'final_fidelity'        : results_data['final_fidelities'][ind_tau], \
+                'proj_final_fidelity'   : proj_final_fidelity, \
+                'basis_size'            : results_data['basis_sizes'][ind_expansion], \
+                'weights'               : weights, \
+                'coeff_hist'            : coeff_hist, \
+                'corr_length'           : corr_length, \
+                'corr_length_err'       : corr_length_err, \
+                'ind_tau'               : ind_tau, \
+                'ind_expansion'         : ind_expansion, \
+                'num_taus'              : num_taus, \
+                'is_final_expanded_tau' : is_final_expanded_tau, \
+                'is_final_tau'          : is_final_tau
             }
             for key in data_dict:
                 tau_dict[key] = data_dict[key]
