@@ -2,6 +2,9 @@
 *\#*
 */_dev
 
+# Pickled files
+*.p
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -77,7 +80,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
-.ipynb
+*.ipynb
 
 # IPython
 profile_default/
