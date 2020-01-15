@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+#PBS -l walltime=04:00:00
+#PBS -l nodes=1:ppn=16
+#PBS -N lbit_run_1
+#PBS -q physics
+#PBS -o pbs_out.txt
+#PBS -e pbs_err.txt
+#
+# End of embedded QSUB options
+#
+## Option for specifying memory: #PBS -l nodes=1:ppn=16:m256GB
+
+# The seed used for the current run.
+export RUN_SEED=1
+
+# Set the number of OpenMP threads per job to 1.
+export OMP_NUM_THREADS=1
+
+# Make sure that the PYTHONPATH includes qosy and the python3 module is loaded.
+#export PYTHONPATH="$HOME/code/qosy:$PYTHONPATH"
+#module load python/3
+
+# Work in this scratch folder.
+cd ~/scratch/runs/lbits/bioms/runs/
+
+# Run each of these serial jobs in parallel on each node.
+for (( i=1; i<=16; i++))
+do
+  python3 -u run_disordered_heisenberg_scan.py -I input_1.json -S $RUN_SEED -P $i > out_$i.txt &
+done
+
+# Wait until they are all finished.
+wait

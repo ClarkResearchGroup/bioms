@@ -4,34 +4,33 @@ disordered Heisenberg chain for many different random
 realizations and disorder strengths.
 
 To use this script, enter
-  >>> python3 -u run_disordered_heisenberg_scan.py -I INPUT -S SEED
+  >>> python3 -u run_disordered_heisenberg_scan.py -I INPUT -S SEED -P PROC
 where "FOLDER" is the folder you would like to save the results
-to and "SEED" is an integer seed for the random number generator.
+to, "SEED" is an integer seed for the random number generator,
+and "PROC" is an integer labeling the current processor ID number.
 """
 
 import os
 import optparse
 import json
 import numpy as np
+import random
 
 import qosy as qy
 
-from context   import bioms
+import bioms
 from operators import single_site_parity
 
 # Parse the input arguments.
 parser = optparse.OptionParser()
 parser.add_option('-I', '--input', type='str', dest='input_filename', help='Input file specifying the run parameters.')
 parser.add_option('-S', '--seed', type='int', dest='seed', help='Random number generator seed.')
+parser.add_option('-P', '--proc', type='int', dest='proc', help='Process ID number.', default=0)
 
 (options, args) = parser.parse_args()
 
 # The input filename.
 input_filename = options.input_filename
-
-# The seed for the random number generator.
-seed = options.seed
-np.random.seed(seed)
 
 # Read the input file.
 input_file = open(input_filename, 'r')
@@ -46,6 +45,21 @@ Ws          = args['Ws']
 num_Ws      = len(Ws)
 num_samples = args['num_samples']
 folder      = args['folder']
+
+# Instantiate the random number generator.
+seed = options.seed
+proc = options.proc
+# Each of the parallel processes uses the same seed.
+random.seed(seed)
+# But starts at a different point in the RNG.
+for step in range(10 * proc * L * num_samples):
+    random.random()
+# Modify the folder name to include the seed and processor info.
+folder += '_{}_{}'.format(seed, proc)
+
+# Save the random number generator and parallel processor info.
+args['seed'] = seed
+args['proc'] = proc
 
 # Create the folder to save information to.
 if not os.path.isdir(folder):
@@ -74,7 +88,7 @@ for ind_sample in range(num_samples):
     # Random realization of magnetic field strengths.
     # Note that the same random pattern is used for
     # all of the disorder strengths.
-    random_potentials = 2.0*np.random.rand(L) - 1.0
+    random_potentials = 2.0*np.array([random.random() for i in range(L)]) - 1.0
     args['random_potentials'] = random_potentials
     
     for ind_W in range(num_Ws):
