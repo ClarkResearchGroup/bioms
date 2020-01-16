@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #PBS -l walltime=04:00:00
-#PBS -l nodes=1:ppn=16
+#PBS -l nodes=2:ppn=16
 #PBS -N lbit_run_1
 #PBS -q physics
 #PBS -o pbs_out.txt
@@ -14,6 +14,9 @@
 # The seed used for the current run.
 export RUN_SEED=1
 
+# The initial processor number for the current run.
+export PROC_START=0
+
 # Set the number of OpenMP threads per job to 1.
 export OMP_NUM_THREADS=1
 
@@ -24,11 +27,13 @@ export OMP_NUM_THREADS=1
 # Work in this scratch folder.
 cd ~/scratch/runs/lbits/bioms/runs/
 
-# Run each of these serial jobs in parallel on each node.
-for (( i=1; i<=16; i++))
-do
-  python3 -u run_disordered_heisenberg_scan.py -I input_1.json -S $RUN_SEED -P $i > out_$i.txt &
-done
+# The number of processes.
+NRANKS=$(wc -l <$PBS_NODEFILE)
 
-# Wait until they are all finished.
-wait
+# For aprun command:
+# -n number of processes (processing elements) in total
+# -N number of processes per node
+# -d number of CPU cores required for each process
+# ALPS_APP_PE the processing element ID
+
+aprun -n $NRANK -N 16 -d 1 python3 -u run_disordered_heisenberg_scan.py -I input_1.json -S $RUN_SEED -P $PROC_START > out_${ALPS_APP_PE}.txt

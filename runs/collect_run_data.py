@@ -16,7 +16,7 @@ import pandas as pd
 
 import qosy as qy
 
-from context import bioms
+import bioms
 from bioms.tools import get_size
 
 # Parse the input arguments.

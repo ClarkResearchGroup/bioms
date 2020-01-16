@@ -10,6 +10,8 @@ to, "SEED" is an integer seed for the random number generator,
 and "PROC" is an integer labeling the current processor ID number.
 """
 
+from mpi4py import MPI
+
 import os
 import optparse
 import json
@@ -21,11 +23,13 @@ import qosy as qy
 import bioms
 from operators import single_site_parity
 
+print('Rank: {}'.format(MPI.COMM_WORLD.rank))
+
 # Parse the input arguments.
 parser = optparse.OptionParser()
 parser.add_option('-I', '--input', type='str', dest='input_filename', help='Input file specifying the run parameters.')
 parser.add_option('-S', '--seed', type='int', dest='seed', help='Random number generator seed.')
-parser.add_option('-P', '--proc', type='int', dest='proc', help='Process ID number.', default=0)
+parser.add_option('-P', '--proc', type='int', dest='proc', help='Process ID number offset.', default=0)
 
 (options, args) = parser.parse_args()
 
@@ -48,11 +52,11 @@ folder      = args['folder']
 
 # Instantiate the random number generator.
 seed = options.seed
-proc = options.proc
+proc = options.proc + MPI.COMM_WORLD.rank # The processor id offset plus the MPI rank.
 # Each of the parallel processes uses the same seed.
 random.seed(seed)
 # But starts at a different point in the RNG.
-for step in range(10 * proc * L * num_samples):
+for step in range(proc * L * num_samples):
     random.random()
 # Modify the folder name to include the seed and processor info.
 folder += '_{}_{}'.format(seed, proc)
@@ -90,6 +94,8 @@ for ind_sample in range(num_samples):
     # all of the disorder strengths.
     random_potentials = 2.0*np.array([random.random() for i in range(L)]) - 1.0
     args['random_potentials'] = random_potentials
+
+    print('random_potentials = {}'.format(random_potentials))
     
     for ind_W in range(num_Ws):
         print('---- W = {} ({}/{}) ----'.format(Ws[ind_W], ind_W + 1, num_Ws))
