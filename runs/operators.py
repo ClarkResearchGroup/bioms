@@ -21,8 +21,9 @@ def single_site_parity(site, num_orbitals, mode=None):
                         coeffs.append(0.0)
                         op_strings.append(qy.opstring('D {}'.format(site1)))
         elif mode == 'linear':
-            coeffs.append(0.0)
-            op_strings.append(qy.opstring('D {}'.format(site1)))
+            if site1 != site:
+                coeffs.append(0.0)
+                op_strings.append(qy.opstring('D {}'.format(site1)))
         else:
             raise ValueError('Invalid mode: {}'.format(mode))
                         
