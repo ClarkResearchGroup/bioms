@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+#PBS -l walltime=00:30:00
+#PBS -l nodes=2:ppn=32
+#PBS -N lbit_run_1
+#PBS -q low
+#PBS -o $PBS_JOBID.out
+#PBS -e $PBS_JOBID.err
+#
+# End of embedded QSUB options
+#
+## Option for specifying memory: #PBS -l nodes=2:ppn=32:xehimem
+
+# The seed used for the current run.
+export RUN_SEED=1234
+
+# The initial processor number for the current run.
+export PROC_START=0
+
+# Set the number of OpenMP threads per job to 1.
+export OMP_NUM_THREADS=1
+
+# Make sure that the PYTHONPATH includes qosy and the python3 module is loaded.
+export PYTHONPATH="$HOME/code/bioms:$HOME/code/qosy:$PYTHONPATH"
+module load bwpy
+module load bwpy-mpi
+
+# Work in this scratch folder.
+cd ~/scratch/runs/lbits/
+
+# The number of processes.
+NRANKS=$(wc -l <$PBS_NODEFILE)
+
+# For aprun command:
+# -n number of processes (processing elements) in total
+# -N number of processes per node
+# -d number of CPU cores required for each process
+# ALPS_APP_PE the processing element ID
+
+aprun -n $NRANK -N 32 -d 1 python3 -u run_disordered_heisenberg_scan.py -I input_1.json -S $RUN_SEED -P $PROC_START > out_${ALPS_APP_PE}.txt
