@@ -12,6 +12,7 @@ and "PROC" is an integer labeling the current processor ID number.
 
 from mpi4py import MPI
 
+import sys
 import os
 import optparse
 import json
@@ -22,8 +23,6 @@ import qosy as qy
 
 import bioms
 from operators import single_site_parity
-
-print('Rank: {}'.format(MPI.COMM_WORLD.rank))
 
 # Parse the input arguments.
 parser = optparse.OptionParser()
@@ -61,6 +60,12 @@ for step in range(proc * L * num_samples):
     random.random()
 # Modify the folder name to include the seed and processor info.
 folder += '_{}_{}'.format(seed, proc)
+
+# Set the output file to pipe standard out to.
+rank       = MPI.COMM_WORLD.rank
+out_file   = open('out_{}_{}_{}_{}.txt'.format(folder, seed, proc, rank), 'w')
+sys.stdout = out_file
+print('Rank: {}'.format(rank))
 
 # Save the random number generator and parallel processor info.
 args['seed'] = seed
@@ -121,3 +126,7 @@ for ind_sample in range(num_samples):
         [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args)
         
         ind_file += 1
+
+# Reset standard output and close the output file.
+sys.stdout = sys.__stdout__
+out_file.close()

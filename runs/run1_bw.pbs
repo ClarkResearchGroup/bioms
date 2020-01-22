@@ -1,15 +1,15 @@
 #!/bin/bash
 #
 #PBS -l walltime=00:30:00
-#PBS -l nodes=2:ppn=32
+#PBS -l nodes=2:ppn=16
 #PBS -N lbit_run_1
-#PBS -q low
+##PBS -q low # low queue has been discontinued
 #PBS -o $PBS_JOBID.out
 #PBS -e $PBS_JOBID.err
 #
 # End of embedded QSUB options
 #
-## Option for specifying memory: #PBS -l nodes=2:ppn=32:xehimem
+## Option for specifying memory: #PBS -l nodes=2:ppn=16:xehimem
 
 # The seed used for the current run.
 export RUN_SEED=1234
@@ -29,7 +29,7 @@ module load bwpy-mpi
 cd ~/scratch/runs/lbits/
 
 # The number of processes.
-NRANKS=$(wc -l <$PBS_NODEFILE)
+#NRANKS=$(wc -l <$PBS_NODEFILE)
 
 # For aprun command:
 # -n number of processes (processing elements) in total
@@ -37,4 +37,4 @@ NRANKS=$(wc -l <$PBS_NODEFILE)
 # -d number of CPU cores required for each process
 # ALPS_APP_PE the processing element ID
 
-aprun -n $NRANK -N 32 -d 1 python3 -u run_disordered_heisenberg_scan.py -I input_1.json -S $RUN_SEED -P $PROC_START > out_${ALPS_APP_PE}.txt
+aprun -n 32 -N 16 -d 1 python3 -u run_disordered_heisenberg_scan.py -I input_1.json -S $RUN_SEED -P $PROC_START
