@@ -61,19 +61,18 @@ for step in range(proc * L * num_samples):
 # Modify the folder name to include the seed and processor info.
 folder += '_{}_{}'.format(seed, proc)
 
+# Create the folder to save information to.
+if not os.path.isdir(folder):
+    os.mkdir(folder)
+
 # Set the output file to pipe standard out to.
-rank       = MPI.COMM_WORLD.rank
-out_file   = open('out_{}_{}_{}_{}.txt'.format(folder, seed, proc, rank), 'w')
+out_file   = open('{}/out.txt'.format(folder), 'w')
 sys.stdout = out_file
-print('Rank: {}'.format(rank))
+print('Rank: {}'.format(MPI.COMM_WORLD.rank))
 
 # Save the random number generator and parallel processor info.
 args['seed'] = seed
 args['proc'] = proc
-
-# Create the folder to save information to.
-if not os.path.isdir(folder):
-    os.mkdir(folder)
 
 # Store all evaluated commutators and products of Majorana
 # strings encountered during the calculations.
