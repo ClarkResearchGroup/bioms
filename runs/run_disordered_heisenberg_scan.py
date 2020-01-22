@@ -47,6 +47,7 @@ L           = args['L']
 periodic    = args['periodic']
 Ws          = args['Ws']
 num_Ws      = len(Ws)
+start_mode  = args['start_mode']
 num_samples = args['num_samples']
 folder      = args['folder']
 
@@ -114,7 +115,7 @@ for ind_sample in range(num_samples):
         H += bioms.magnetic_fields(W * random_potentials)
 
         # The initial operator centered at the center of the chain.
-        initial_op = single_site_parity(L//2, L)
+        initial_op = single_site_parity(L//2, L, mode=start_mode)
 
         ### Run find_binary_iom().
         [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args)
