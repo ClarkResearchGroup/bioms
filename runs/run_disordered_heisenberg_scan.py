@@ -123,6 +123,8 @@ for ind_sample in range(num_samples):
 
         ### Run find_binary_iom().
         [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args)
+
+        sys.stdout.flush()
         
         ind_file += 1
 
