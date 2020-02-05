@@ -49,6 +49,12 @@ num_Ws      = len(Ws)
 start_mode  = args['start_mode']
 num_samples = args['num_samples']
 folder      = args['folder']
+ham_type    = args['ham_type']
+
+if ham_type == '1D_Heisenberg':
+    N = L
+elif ham_type == '2D_Heisenberg':
+    N = L*L
 
 # Instantiate the random number generator.
 seed = options.seed
@@ -56,7 +62,7 @@ proc = options.proc + MPI.COMM_WORLD.rank # The processor id offset plus the MPI
 # Each of the parallel processes uses the same seed.
 random.seed(seed)
 # But starts at a different point in the RNG.
-for step in range(proc * L * num_samples):
+for step in range(proc * N * num_samples):
     random.random()
 # Modify the folder name to include the seed and processor info.
 folder += '_{}_{}'.format(seed, proc)
@@ -97,7 +103,7 @@ for ind_sample in range(num_samples):
     # Random realization of magnetic field strengths.
     # Note that the same random pattern is used for
     # all of the disorder strengths.
-    random_potentials = 2.0*np.array([random.random() for i in range(L)]) - 1.0
+    random_potentials = 2.0*np.array([random.random() for i in range(N)]) - 1.0
     args['random_potentials'] = random_potentials
 
     print('random_potentials = {}'.format(random_potentials))
@@ -114,12 +120,16 @@ for ind_sample in range(num_samples):
         J_z  = 1.0
 
         # The Heisenberg chain.
-        H = bioms.xxz_chain(L, J_xy, J_z, periodic=periodic)
+        if ham_type == '1D_Heisenberg':
+            H = bioms.xxz_chain(L, J_xy, J_z, periodic=periodic)
+        elif ham_type == '2D_Heisenberg':
+            H = bioms.xxz_square(L, J_xy, J_z, periodic=periodic)
+
         # Perturbing magnetic fields.
         H += bioms.magnetic_fields(W * random_potentials)
 
         # The initial operator centered at the center of the chain.
-        initial_op = single_site_parity(L//2, L, mode=start_mode)
+        initial_op = single_site_parity(N//2, N, mode=start_mode)
 
         ### Run find_binary_iom().
         [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args)

@@ -3,6 +3,7 @@
 #PBS -l walltime=00:30:00
 #PBS -l nodes=2:ppn=16
 #PBS -N lbit_run_1
+#PBS -A bbbz
 ##PBS -q low # low queue has been discontinued
 #PBS -o $PBS_JOBID.out
 #PBS -e $PBS_JOBID.err

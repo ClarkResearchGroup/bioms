@@ -21,12 +21,53 @@ def xxz_chain(L, J_xy, J_z, periodic=False):
     
     return H
 
+def xxz_square(L, J_xy, J_z, periodic=False):
+    Lx = L
+    Ly = L
+    N  = Lx*Ly
+    
+    coeffs     = []
+    op_strings = []
+
+    for y in range(Ly):
+        for x in range(Lx):
+            # Two bonds
+            for bond in [(1,0), (0,1)]:
+                site = y*Lx + x
+
+                dx = bond[0]
+                dy = bond[1]
+
+                # Bond pointing to the right
+                xp = x + dx
+                yp = y + dy
+                if periodic:
+                    xp = xp % Lx
+                    yp = yp % Ly
+
+                if xp >= 0 and xp < Lx and yp >= 0 and yp < Ly:
+                    sitep = yp*Lx + xp
+
+                    s1 = np.minimum(site, sitep)
+                    s2 = np.maximum(site, sitep)
+
+                    for orb in ['X', 'Y', 'Z']:
+                        if orb in ['X', 'Y']:
+                            coeffs.append(0.25 * J_xy)
+                        else:
+                            coeffs.append(0.25 * J_z)
+                        op_strings.append(qy.opstring('{} {} {} {}'.format(orb,s1,orb,s2)))
+
+    H = qy.Operator(coeffs, op_strings)
+    
+    return H
+
 # TODO: document
 def magnetic_fields(potentials):
-    L = len(potentials)
+    N = len(potentials)
     
     coeffs     = 0.5 * potentials
-    op_strings = [qy.opstring('Z {}'.format(site)) for site in range(L)]
+    op_strings = [qy.opstring('Z {}'.format(site)) for site in range(N)]
     
     H = qy.Operator(coeffs, op_strings)
     

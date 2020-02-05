@@ -1,0 +1,17 @@
+{
+    "L"              : 10,
+    "ham_type"       : "2D_Heisenberg",
+    "periodic"       : true,
+    "start_mode"     : "constant",
+    "Ws"             : [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0],
+    "num_samples"    : 10,
+    "folder"         : "run2D_constant",
+
+    "dbasis"         : 200,
+    "num_expansions" : 10,
+    "xtol"           : 1e-6,
+    "coeff_com_norm" : 1.0,
+    "coeff_binarity" : 1.0,
+    "global_op_type" : "Pauli",
+    "verbose"        : true
+}
