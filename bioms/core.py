@@ -75,7 +75,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     initial_tau = copy.deepcopy(tau)
 
     if verbose:
-        print('Initial \\tau = ')
+        print('Initial \\tau = ', flush=True)
         print_operator(initial_tau, num_terms=20)
 
     basis = tau._basis
@@ -214,7 +214,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         iteration_data = None
 
         if verbose:
-            print(' (|\\tau| = {}, com_norm = {}, binarity = {})'.format(nla.norm(y), com_norm, binarity))
+            print(' (|\\tau| = {}, com_norm = {}, binarity = {})'.format(nla.norm(y), com_norm, binarity), flush=True)
 
     ### DEFINE THE FUNCTIONS USED IN THE OPTIMIZATION ###
 
@@ -228,8 +228,8 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     basis_inds  = []
     for ind_expansion in range(num_expansions):
         if verbose:
-            print('==== Iteration {}/{} ===='.format(ind_expansion+1, num_expansions))
-            print('Basis size: {}'.format(len(basis)))
+            print('==== Iteration {}/{} ===='.format(ind_expansion+1, num_expansions), flush=True)
+            print('Basis size: {}'.format(len(basis)), flush=True)
 
         ### Compute the relevant quantities in the current basis.
         [L_H, extended_basis] = lmatrix(basis, H, explored_com_data, operation_mode='commutator')
@@ -265,7 +265,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         tau = tau.coeffs.real / nla.norm(tau.coeffs.real)
 
         if verbose:
-            print('\\tau = ')
+            print('\\tau = ', flush=True)
             print_operator(qy.Operator(tau, basis))
 
         ### Do some book-keeping.
@@ -276,7 +276,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         prev_num_taus = len(taus)
 
     if verbose:
-        print('Computing fidelities.')
+        print('Computing fidelities.', flush=True)
     start = time.time()
 
     initial_tau_vector = initial_tau.coeffs
@@ -329,11 +329,11 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
 
     end = time.time()
     if verbose:
-        print('Computed fidelities in {} seconds.'.format(end - start))
+        print('Computed fidelities in {} seconds.'.format(end - start), flush=True)
 
     end_run = time.time()
     if verbose:
-        print('Total time elapsed: {} seconds (or {} minutes or {} hours)'.format(end_run - start_run, (end_run - start_run)/60.0, (end_run - start_run)/3600.0))
+        print('Total time elapsed: {} seconds (or {} minutes or {} hours)'.format(end_run - start_run, (end_run - start_run)/60.0, (end_run - start_run)/3600.0), flush=True)
 
     # Store the results in a dictionary.
     results_data = {'taus'                       : taus,
@@ -370,10 +370,10 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     tau_op = qy.Operator(taus[-1], basis)
 
     if verbose:
-        print('Final tau = ')
+        print('Final tau = ', flush=True)
         print_operator(tau_op, num_terms=200)
 
-        print('Final com norm  = {}'.format(com_norm))
-        print('Final binarity  = {}'.format(binarity))
+        print('Final com norm  = {}'.format(com_norm), flush=True)
+        print('Final binarity  = {}'.format(binarity), flush=True)
     
     return [tau_op, com_norms[-1], binarities[-1], results_data]

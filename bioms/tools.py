@@ -144,7 +144,7 @@ def print_operator(op, num_terms=20):
         coeff = op.coeffs[ind_s]
         os    = op._basis[ind_s]
         if ind < num_terms:
-            print('{} {}'.format(coeff, os))
+            print('{} {}'.format(coeff, os), flush=True)
         ind += 1
 
 # TODO: document
