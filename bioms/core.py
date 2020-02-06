@@ -92,7 +92,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     iteration_data        = None
 
     # Returns the iteration data
-    # needed by obj, jac_obj, and hess_obj
+    # needed by obj, grad_obj, and hess_obj
     # and computes/updates it if it is not available.
     def updated_iteration_data(y):
         # Nonlocal variables that will be used or
@@ -130,7 +130,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     # Specifies the gradient \partial_a Z of the objective function
     # Z = \\lambda_1 |[H, O]|^2 + \\lambda_2 |O^2 - I|^2,
     # where O=\sum_a g_a S_a.
-    def jac_obj(y):
+    def grad_obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
         nonlocal basis, C_H, res_anticom_ext_basis
@@ -245,7 +245,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         ### Minimize the objective function.
         options    = {'maxiter' : 1000, 'disp' : verbose, 'xtol' : xtol}
         x0         = tau.real / nla.norm(tau.real)
-        opt_result = so.minimize(obj, x0=x0, method='Newton-CG', jac=jac_obj, hess=hess_obj, options=options, callback=update_vars)
+        opt_result = so.minimize(obj, x0=x0, method='Newton-CG', jac=grad_obj, hess=hess_obj, options=options, callback=update_vars)
         
         # Clear the iteration data.
         del iteration_data

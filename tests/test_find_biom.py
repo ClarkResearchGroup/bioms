@@ -2,19 +2,6 @@ from .context import bioms
 import qosy as qy
 import numpy as np
 
-# TODO: finish
-#def test_jacobian():
-#    # Test that the jacobian of find_biom()
-#    # matches finite-difference.
-#
-#    pass
-
-# TODO: finish
-#def test_hessian():
-#    # Test that the hessian of find_biom()
-#    # matches finite-difference.
-#    pass
-
 def test_find_biom():
     # Test that the gradient-descent works
     # by finding a non-interacting integral of
