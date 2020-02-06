@@ -71,26 +71,92 @@ def operator_weights(operator, num_orbitals):
 
     return weights
 
+# Compute the "localities" of an operator O = \sum_a g_a S_a,
+# the probability \sum_{a for k-local S_a} g_a^2/\sum_b g_b^2
+# of an operator string S_a in the expansion being k-local.
+def operator_localities(operator, num_orbitals):
+    localities = np.zeros(num_orbitals) + 1e-16
+    for (coeff, op_string) in operator:
+        # The integer k for a k-local operator string,
+        # i.e., the number of sites that the operator
+        # string acts on.
+        k              = len(op_string.orbital_operators)
+        localities[k] += np.abs(coeff)**2.0
+    localities /= np.sum(localities)
+
+    return localities
+
+# TODO: test!
 # Performs an exponential fit
 # for the weights of the 1D lbit.
-def exp_fit(weights):
-    # Assumes a 1D chain.
-    x  = np.arange(len(weights))
-    y  = weights
-    
-    ind0 = np.argmax(weights)
-    x0   = x[ind0]
-    
-    # The exponential function to fit.
-    def func(x, a, b):
-        return b * np.exp(-np.abs(x - x0) / a)
+def exp_fit(weights, lattice_type):
+    # For a 1D chain.
+    if lattice_type == '1D_chain':
+        x  = np.arange(len(weights))
+        y  = weights
 
-    # TODO: write jacobian
-    #def jac_func(x, a, b):
-    #    return np.array()
-    
-    popt, pcov = so.curve_fit(func, x, y)
-    
+        ind0 = np.argmax(weights)
+        x0   = x[ind0]
+
+        inds_nonzero = np.where(np.abs(weights) > 2e-16)[0]
+        x = x[inds_nonzero]
+        y = y[inds_nonzero]
+
+        # The exponential function to fit.
+        def func(x, a, b):
+            return b * np.exp(-np.abs(x - x0) / a)
+
+        # TODO: write jacobian
+        #def jac_func(x, a, b):
+        #    return np.array()
+
+        popt, pcov = so.curve_fit(func, x, y)
+    # For a 2D square lattice.
+    elif lattice_type == '2D_square':
+        N  = len(weights)
+        L  = int(np.round(np.sqrt(N)))
+        Lx = L
+        Ly = L
+        
+        xs = []
+        ys = []
+        for y in range(Ly):
+            for x in range(Lx):
+                xs.append(x)
+                ys.append(y)
+        xs = np.array(xs)
+        ys = np.array(ys)
+        
+        
+
+        ind0 = np.argmax(weights)
+        x0   = xs[ind0]
+        y0   = ys[ind0]
+        
+        inds_nonzero = np.where(np.abs(weights) > 2e-16)[0]
+        sites   = inds_nonzero
+        weights = weights[inds_nonzero]
+        xs      = xs[inds_nonzero]
+        ys      = ys[inds_nonzero]
+
+        # The exponential function to fit.
+        def func(sites, a, b):
+            xs = xs[sites]
+            ys = ys[sites]
+            result = np.zeros(len(sites))
+            for ind_s in range(len(sites)):
+                result[ind_s] = b * np.exp(-nla.norm(np.array([xs[ind_s] - x0, ys[ind_s] - y0]))/ a)
+            
+            return result
+
+        # TODO: write jacobian
+        #def jac_func(x, a, b):
+        #    return np.array()
+        
+        popt, pcov = so.curve_fit(func, sites, weights)
+    else:
+        raise ValueError('Invalid lattice_type: {}'.format(lattice_type))
+        
     return [popt, pcov]
     
 # Keep a list of dicts to transform into a pandas
@@ -128,6 +194,15 @@ for folder in folders:
         # the weights of the operators on different sites.
         L              = args['L']
         explored_basis = args['explored_basis']
+
+        if results_data['ham_type'] == '1D_Heisenberg':
+            lattice_type = '1D_chain'
+            N            = L
+        elif results_data['ham_type'] == '2D_Heisenberg':
+            lattice_type = '2D_square'
+            N            = L * L
+        else:
+            raise ValueError('Invalid ham_type: {}'.format(results_data['ham_type']))
         
         taus                       = results_data['taus']
         num_taus_in_expansion      = results_data['num_taus_in_expansion']
@@ -148,12 +223,15 @@ for folder in folders:
             operator            = qy.Operator(coeffs, op_strings)
 
             # The weight of the operator on each site.
-            weights = operator_weights(operator, L)
+            weights = operator_weights(operator, N)
+
+            # The distribution of k-local operator strings in the operator.
+            localities = operator_localities(operator, N)
 
             # Find an exponential fit of the weights.
-            [opt_params, opt_covs] = exp_fit(weights)
-            corr_length     = opt_params[0]
-            corr_length_err = np.sqrt(np.abs(opt_covs[0,0])) 
+            [opt_params, opt_covs] = exp_fit(weights, lattice_type)
+            corr_length            = opt_params[0]
+            corr_length_err        = np.sqrt(np.abs(opt_covs[0,0])) 
             
             # The histogram of the amplitudes of the operator on each operator string.
             (coeff_hist, bin_edges) = np.histogram(-np.log(np.abs(coeffs)+1e-16)/np.log(10.0), bins = np.linspace(0.0, 16.0, 17))
@@ -189,6 +267,7 @@ for folder in folders:
                 'proj_final_fidelity'   : proj_final_fidelity, \
                 'basis_size'            : results_data['basis_sizes'][ind_expansion], \
                 'weights'               : weights, \
+                'localities'            : localities, \
                 'coeff_hist'            : coeff_hist, \
                 'corr_length'           : corr_length, \
                 'corr_length_err'       : corr_length_err, \
