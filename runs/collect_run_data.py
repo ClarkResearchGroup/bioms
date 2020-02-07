@@ -11,6 +11,7 @@ import pickle
 import optparse
 import json
 import numpy as np
+import numpy.linalg as nla
 import scipy.optimize as so
 import pandas as pd
 
