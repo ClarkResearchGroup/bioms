@@ -195,14 +195,14 @@ for folder in folders:
         L              = args['L']
         explored_basis = args['explored_basis']
 
-        if results_data['ham_type'] == '1D_Heisenberg':
+        if args['ham_type'] == '1D_Heisenberg':
             lattice_type = '1D_chain'
             N            = L
-        elif results_data['ham_type'] == '2D_Heisenberg':
+        elif args['ham_type'] == '2D_Heisenberg':
             lattice_type = '2D_square'
             N            = L * L
         else:
-            raise ValueError('Invalid ham_type: {}'.format(results_data['ham_type']))
+            raise ValueError('Invalid ham_type: {}'.format(args['ham_type']))
         
         taus                       = results_data['taus']
         num_taus_in_expansion      = results_data['num_taus_in_expansion']
