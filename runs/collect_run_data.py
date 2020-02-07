@@ -98,14 +98,12 @@ def exp_fit(weights, lattice_type):
         ind0 = np.argmax(weights)
         x0   = x[ind0]
         
-        inds_nonzero = np.where(np.abs(weights) > 2e-16)[0]
-        x = x[inds_nonzero]
-        y = y[inds_nonzero]
-        
         # The exponential function to fit.
-        def func(x, a, b):
+        def func(x, a):
             nonlocal x0
-            return b * np.exp(-np.abs(x - x0) / a)
+            result = np.exp(-np.abs(x - x0) / a)
+            result /= np.sum(result) # Normalize the probability distribution.
+            return result
         
         # TODO: write jacobian
         #def jac_func(x, a, b):
@@ -132,19 +130,16 @@ def exp_fit(weights, lattice_type):
         x0   = xs[ind0]
         y0   = ys[ind0]
         
-        inds_nonzero = np.where(np.abs(weights) > 2e-16)[0]
-        sites   = np.array(inds_nonzero, dtype=int)
-        weights = weights[inds_nonzero]
-        xs      = xs[inds_nonzero]
-        ys      = ys[inds_nonzero]
+        sites   = np.arange(N)
         
         # The exponential function to fit.
-        def func(sites, a, b):
+        def func(sites, a):
             nonlocal xs, ys, x0, y0
             
             result = np.zeros(len(sites))
             for ind_s in range(len(sites)):
-                result[ind_s] = b * np.exp(-nla.norm(np.array([xs[ind_s] - x0, ys[ind_s] - y0]))/ a)
+                result[ind_s] = np.exp(-nla.norm(np.array([xs[ind_s] - x0, ys[ind_s] - y0])) / a)
+            result /= np.sum(result) # Normalize the probability distribution.
                 
             return result
         
