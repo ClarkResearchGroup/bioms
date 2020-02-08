@@ -93,6 +93,7 @@ def operator_localities(operator, num_orbitals):
 def exp_fit(weights, lattice_type):
     # For a 1D chain.
     if lattice_type == '1D_chain':
+        L  = len(weights)
         x  = np.arange(len(weights))
         y  = weights
         
@@ -110,7 +111,10 @@ def exp_fit(weights, lattice_type):
         #def jac_func(x, a, b):
         #    return np.array()
         
-        popt, pcov = so.curve_fit(func, x, y)
+        try:
+            popt, pcov = so.curve_fit(func, x, y, bounds=(1e-16, L))
+        except:
+            popt, pcov = np.array([0.0]), np.array([0.0])
     # For a 2D square lattice.
     elif lattice_type == '2D_square':
         N  = len(weights)
@@ -147,8 +151,10 @@ def exp_fit(weights, lattice_type):
         # TODO: write jacobian
         #def jac_func(x, a, b):
         #    return np.array()
-        
-        popt, pcov = so.curve_fit(func, sites, weights)
+        try:
+            popt, pcov = so.curve_fit(func, sites, weights, bounds=(1e-16, L))
+        except:
+            popt, pcov = np.array([0.0]), np.array([0.0])
     else:
         raise ValueError('Invalid lattice_type: {}'.format(lattice_type))
     
