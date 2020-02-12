@@ -78,7 +78,7 @@ if not os.path.isdir(folder):
 # Set the output file to pipe standard out to.
 out_file   = open('{}/out.txt'.format(folder), 'w')
 sys.stdout = out_file
-print('Rank: {}'.format(MPI.COMM_WORLD.rank))
+print('Rank: {}'.format(MPI.COMM_WORLD.rank), flush=True)
 
 # Save the random number generator and parallel processor info.
 args['seed'] = seed
@@ -100,7 +100,7 @@ args['explored_anticom_data'] = explored_anticom_data
 # to file.
 ind_file = 0
 for ind_sample in range(num_samples):
-    print('++++ SAMPLE {}/{} ++++'.format(ind_sample + 1, num_samples))
+    print('++++ SAMPLE {}/{} ++++'.format(ind_sample + 1, num_samples), flush=True)
     
     args['ind_sample'] = ind_sample
     
@@ -110,10 +110,10 @@ for ind_sample in range(num_samples):
     random_potentials = 2.0*np.array([random.random() for i in range(N)]) - 1.0
     args['random_potentials'] = random_potentials
     
-    print('random_potentials = {}'.format(random_potentials))
+    print('random_potentials = {}'.format(random_potentials), flush=True)
     
     for ind_W in range(num_Ws):
-        print('---- W = {} ({}/{}) ----'.format(Ws[ind_W], ind_W + 1, num_Ws))
+        print('---- W = {} ({}/{}) ----'.format(Ws[ind_W], ind_W + 1, num_Ws), flush=True)
         
         W                        = Ws[ind_W]
         args['W']                = W
@@ -136,7 +136,7 @@ for ind_sample in range(num_samples):
         # Perturbing magnetic fields.
         H += bioms.magnetic_fields(W * random_potentials)
         
-        # The initial operator centered at the center of the chain.
+        # The initial operator centered at the center of the lattice.
         initial_op = single_site_parity(N//2, N, mode=start_mode)
         
         ### Run find_binary_iom().
