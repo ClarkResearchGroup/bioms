@@ -55,6 +55,10 @@ if ham_type == '1D_Heisenberg':
     N = L
 elif ham_type == '2D_Heisenberg':
     N = L*L
+elif ham_type == '3D_Heisenberg':
+    N = L*L*L
+else:
+    raise ValueError('Invalid ham_type: {}'.format(ham_type))
 
 # Instantiate the random number generator.
 seed = options.seed
@@ -105,7 +109,7 @@ for ind_sample in range(num_samples):
     # all of the disorder strengths.
     random_potentials = 2.0*np.array([random.random() for i in range(N)]) - 1.0
     args['random_potentials'] = random_potentials
-
+    
     print('random_potentials = {}'.format(random_potentials))
     
     for ind_W in range(num_Ws):
@@ -118,22 +122,26 @@ for ind_sample in range(num_samples):
         # Hard-coded parameters for Heisenberg model.
         J_xy = 1.0
         J_z  = 1.0
-
+        
         # The Heisenberg chain.
         if ham_type == '1D_Heisenberg':
             H = bioms.xxz_chain(L, J_xy, J_z, periodic=periodic)
         elif ham_type == '2D_Heisenberg':
             H = bioms.xxz_square(L, J_xy, J_z, periodic=periodic)
-
+        elif ham_type == '3D_Heisenberg':
+            H = bioms.xxz_cubic(L, J_xy, J_z, periodic=periodic)
+        else:
+            raise ValueError('Invalid ham_type: {}'.format(ham_type))
+        
         # Perturbing magnetic fields.
         H += bioms.magnetic_fields(W * random_potentials)
-
+        
         # The initial operator centered at the center of the chain.
         initial_op = single_site_parity(N//2, N, mode=start_mode)
-
+        
         ### Run find_binary_iom().
         [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args)
-
+        
         sys.stdout.flush()
         
         ind_file += 1

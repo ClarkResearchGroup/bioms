@@ -38,7 +38,7 @@ def xxz_square(L, J_xy, J_z, periodic=False):
                 dx = bond[0]
                 dy = bond[1]
 
-                # Bond pointing to the right
+                # Bond pointing to the right and up
                 xp = x + dx
                 yp = y + dy
                 if periodic:
@@ -57,6 +57,52 @@ def xxz_square(L, J_xy, J_z, periodic=False):
                         else:
                             coeffs.append(0.25 * J_z)
                         op_strings.append(qy.opstring('{} {} {} {}'.format(orb,s1,orb,s2)))
+
+    H = qy.Operator(coeffs, op_strings)
+    
+    return H
+
+def xxz_cubic(L, J_xy, J_z, periodic=False):
+    Lx = L
+    Ly = L
+    Lz = L
+    N  = Lx*Ly*Lz
+    
+    coeffs     = []
+    op_strings = []
+
+    for z in range(Lz):
+        for y in range(Ly):
+            for x in range(Lx):
+                # Two bonds
+                for bond in [(1,0,0), (0,1,0), (0,0,1)]:
+                    site = z*Lx*Ly + y*Lx + x
+
+                    dx = bond[0]
+                    dy = bond[1]
+                    dz = bond[2]
+
+                    # Bond pointing to the right, up, and in
+                    xp = x + dx
+                    yp = y + dy
+                    zp = z + dz
+                    if periodic:
+                        xp = xp % Lx
+                        yp = yp % Ly
+                        zp = zp % Lz
+                        
+                    if xp >= 0 and xp < Lx and yp >= 0 and yp < Ly and zp >= 0 and zp < Lz:
+                        sitep = zp*Lx*Ly + yp*Lx + xp
+
+                        s1 = np.minimum(site, sitep)
+                        s2 = np.maximum(site, sitep)
+
+                        for orb in ['X', 'Y', 'Z']:
+                            if orb in ['X', 'Y']:
+                                coeffs.append(0.25 * J_xy)
+                            else:
+                                coeffs.append(0.25 * J_z)
+                            op_strings.append(qy.opstring('{} {} {} {}'.format(orb,s1,orb,s2)))
 
     H = qy.Operator(coeffs, op_strings)
     
