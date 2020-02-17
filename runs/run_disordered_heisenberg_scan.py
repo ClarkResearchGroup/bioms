@@ -14,6 +14,7 @@ from mpi4py import MPI
 
 import sys
 import os
+import psutil
 import optparse
 import json
 import numpy as np
@@ -78,7 +79,9 @@ if not os.path.isdir(folder):
 # Set the output file to pipe standard out to.
 out_file   = open('{}/out.txt'.format(folder), 'w')
 sys.stdout = out_file
-print('Rank: {}'.format(MPI.COMM_WORLD.rank), flush=True)
+
+nprocs = MPI.COMM_WORLD.Get_size()
+print('Rank: {} ({} processes)'.format(MPI.COMM_WORLD.rank, nprocs), flush=True)
 
 # Save the random number generator and parallel processor info.
 args['seed'] = seed
@@ -86,14 +89,12 @@ args['proc'] = proc
 
 # Store all evaluated commutators and products of Majorana
 # strings encountered during the calculations.
-explored_com_data     = [qy.Basis(), qy.Basis(), dict()]
-explored_anticom_data = [qy.Basis(), qy.Basis(), dict()]
 
 # Args are used for two things:
 # 1. To specify the input parameters to find_binary_iom()
 # 2. To save run information to file for later reference.
-args['explored_com_data']     = explored_com_data
-args['explored_anticom_data'] = explored_anticom_data
+args['explored_com_data']     = [qy.Basis(), qy.Basis(), dict()]
+args['explored_anticom_data'] = [qy.Basis(), qy.Basis(), dict()]
 
 # Loop through disordered realizations and the disorder
 # strengths. Find approximate l-bits and save the results
@@ -142,9 +143,15 @@ for ind_sample in range(num_samples):
         ### Run find_binary_iom().
         [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args)
         
+        # Clear some unnecessary memory.
+        del results_data
+
         sys.stdout.flush()
         
         ind_file += 1
+
+# Free memory at the end of the run (important for MPI applications).
+del args
 
 # Reset standard output and close the output file.
 sys.stdout = sys.__stdout__

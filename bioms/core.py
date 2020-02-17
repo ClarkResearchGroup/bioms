@@ -1,4 +1,5 @@
 import copy
+import psutil
 import time
 import pickle
 import numpy as np
@@ -12,6 +13,26 @@ import qosy as qy
 
 from bioms.tools import arg, print_operator, lmatrix, expand_com, expand_anticom, compute_overlap_inds, project_vector, project
 
+# Check if about to run out of memory.
+# If so, empty the explored data.
+def check_memory(args):
+    vmem             = dict(psutil.virtual_memory()._asdict())
+    percent_mem_used = float(vmem['percent'])
+    if args['verbose']:
+        print('vmem = {}'.format(vmem), flush=True)
+
+        if percent_mem_used > args['percent_mem_threshold']:
+            print('== EMPTYING MEMORY (percent mem used = {} > {}). =='.format(percent_mem_used, args['percent_mem_threshold']), flush=True)
+            
+            del args['explored_com_data']
+            del args['explored_anticom_data']
+            
+            args['explored_com_data']     = [qy.Basis(), qy.Basis(), dict()]
+            args['explored_anticom_data'] = [qy.Basis(), qy.Basis(), dict()]
+            
+            vmem = dict(psutil.virtual_memory()._asdict())
+            print('== vmem after emptying = {} =='.format(vmem), flush=True)
+    
 def find_binary_iom(hamiltonian, initial_op, args=None):
     """Find an approximate binary integral of motion O by iteratively
        minimizing the objective function
@@ -29,11 +50,22 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     
     ### SETUP THE ALGORITHM PARAMETERS ###
 
+    # Flag whether to print output for the run.
+    verbose = arg(args, 'verbose', False)
+
     # The "explored" commutation and anticommutation relations
     # saved so far in the calculation. Used as a look-up table.
-    explored_com_data     = arg(args, 'explored_com_data', [qy.Basis(), qy.Basis(), dict()])
-    explored_anticom_data = arg(args, 'explored_anticom_data', [qy.Basis(), qy.Basis(), dict()])
-
+    if ('explored_com_data' not in args) or (args['explored_com_data'] is None):
+        args['explored_com_data'] = [qy.Basis(), qy.Basis(), dict()]
+    if ('explored_anticom_data' not in args) or (args['explored_anticom_data'] is None):
+        args['explored_anticom_data'] = [qy.Basis(), qy.Basis(), dict()]
+    
+    # The RAM threshold.
+    percent_mem_threshold = arg(args, 'percent_mem_threshold', 85.0)
+    
+    # If using more than the RAM threshold, empty the explored data.
+    check_memory(args)
+    
     # The OperatorString type to use in all calculations.
     global_op_type = arg(args, 'global_op_type', 'Majorana')
 
@@ -52,9 +84,6 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     # The number of OperatorStrings to add to the
     # basis at each expansion step.
     dbasis = arg(args, 'dbasis', len(initial_op._basis))
-
-    # Flag whether to print output for the run.
-    verbose = arg(args, 'verbose', False)
 
     # The filename to save data to. If not provided, do not write to file.
     results_filename = arg(args, 'results_filename', None)
@@ -102,7 +131,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         if iteration_data is not None and np.allclose(y, iteration_data[0], atol=1e-14):
             return iteration_data
         else:
-            [Lbar_tau, res_anticom_ext_basis] = lmatrix(basis, qy.Operator(y, basis), explored_anticom_data, operation_mode='anticommutator')
+            [Lbar_tau, res_anticom_ext_basis] = lmatrix(basis, qy.Operator(y, basis), args['explored_anticom_data'], operation_mode='anticommutator')
             iteration_data = [np.copy(y), Lbar_tau]
 
             return iteration_data
@@ -150,9 +179,9 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     def hess_obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, C_H, explored_anticom_data
+        nonlocal basis, C_H, args
 
-        [explored_basis, explored_extended_basis, explored_s_constants_data] = explored_anticom_data
+        [explored_basis, explored_extended_basis, explored_s_constants_data] = args['explored_anticom_data']
 
         [_, Lbar_tau] = updated_iteration_data(y)
         Cbar_tau = (Lbar_tau.H).dot(Lbar_tau)
@@ -231,12 +260,15 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
             print('==== Iteration {}/{} ===='.format(ind_expansion+1, num_expansions), flush=True)
             print('Basis size: {}'.format(len(basis)), flush=True)
 
+        ### Check that there is enough memory for the current expansion step.
+        check_memory(args)
+
         ### Compute the relevant quantities in the current basis.
-        [L_H, extended_basis] = lmatrix(basis, H, explored_com_data, operation_mode='commutator')
+        [L_H, extended_basis] = lmatrix(basis, H, args['explored_com_data'], operation_mode='commutator')
         C_H = (L_H.H).dot(L_H)
         C_H = C_H.real
 
-        explored_basis = explored_com_data[0]
+        explored_basis = args['explored_com_data'][0]
         basis_inds_in_explored_basis = np.array([explored_basis.index(os_b) for os_b in basis], dtype=int)
         basis_inds.append(basis_inds_in_explored_basis)
 
@@ -255,7 +287,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         old_basis = copy.deepcopy(basis)
 
         # Expand by [H, [H, \tau]]
-        expand_com(H, com_residual, extended_basis, basis, dbasis//2, explored_com_data)
+        expand_com(H, com_residual, extended_basis, basis, dbasis//2, args['explored_com_data'])
 
         # Expand by \{\tau, \tau\}
         expand_anticom(anticom_residual, res_anticom_ext_basis, basis, dbasis//2)
@@ -280,7 +312,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     start = time.time()
 
     initial_tau_vector = initial_tau.coeffs
-    explored_basis     = explored_com_data[0]
+    explored_basis     = args['explored_com_data'][0]
     initial_tau_inds   = np.array([explored_basis.index(os_tv) for os_tv in initial_tau._basis], dtype=int)
 
     final_tau_vector = taus[-1]
@@ -361,10 +393,13 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
                 args_to_record[key] = args[key]
         args_to_record['explored_basis'] = args['explored_com_data'][0]
         
-        data = [args_to_record, results_data]
+        data         = [args_to_record, results_data]
         results_file = open(results_filename, 'wb')
         pickle.dump(data, results_file)
         results_file.close()
+
+        args_to_record.clear()
+        del args_to_record
 
     # The final optimized operator O.
     tau_op = qy.Operator(taus[-1], basis)

@@ -1,0 +1,5 @@
+{
+    "folders"               : ["run2D_test_1234_0"],
+    "output_filename"       : "output_run_2D_test.p",
+    "record_only_converged" : true
+}
