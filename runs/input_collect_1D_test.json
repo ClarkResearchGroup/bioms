@@ -1,5 +1,5 @@
 {
     "folders"               : ["run1D_test_123_0"],
-    "output_filename"       : "output_run_1D_test.p",
+    "output_filename"       : "output_run_1D_test",
     "record_only_converged" : true
 }

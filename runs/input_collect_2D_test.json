@@ -1,5 +1,5 @@
 {
-    "folders"               : ["run2D_test_1234_0"],
-    "output_filename"       : "output_run_2D_test.p",
+    "folders"               : ["run2D_test_1234_0", "run2D_test_1234_1"],
+    "output_filename"       : "output_run_2D_test",
     "record_only_converged" : true
 }

@@ -1,5 +1,5 @@
 {
     "folders"               : ["run3D_test_12345_0"],
-    "output_filename"       : "output_run_3D_test.p",
+    "output_filename"       : "output_run_3D_test",
     "record_only_converged" : true
 }

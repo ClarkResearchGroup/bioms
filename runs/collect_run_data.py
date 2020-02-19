@@ -5,8 +5,9 @@ can be more easily manipulated to generate plots,
 and save the compressed format to file.
 """
 
-
+from mpi4py import MPI
 import os
+import sys
 import warnings
 import pickle
 import optparse
@@ -27,6 +28,16 @@ from bioms.tools import get_size
 # tries to fit a function with a single data point.
 warnings.filterwarnings('ignore', category=so.OptimizeWarning)
 
+# Gather the MPI information.
+rank   = MPI.COMM_WORLD.rank
+nprocs = MPI.COMM_WORLD.Get_size()
+
+# Set the output file to pipe standard out to.
+out_file   = open('out_collect_{}.txt'.format(rank), 'w')
+sys.stdout = out_file
+
+print('Rank: {} ({} processes)'.format(rank, nprocs), flush=True)
+
 # Parse the input arguments.
 parser = optparse.OptionParser()
 parser.add_option('-I', '--input', type='str', dest='input_filename', help='Input file specifying the data to collect and analyze.')
@@ -41,11 +52,18 @@ input_file = open(input_filename, 'r')
 input_args = json.load(input_file)
 input_file.close()
 
-# The folders to read data from.
-folders = input_args['folders']
+# All of the folders to read data from.
+all_folders     = input_args['folders']
+num_all_folders = len(all_folders)
+# The folders to read in this process.
+num_folders_per_proc = int(num_all_folders//nprocs)
+inds_folders         = np.arange(num_folders_per_proc * rank, num_folders_per_proc * (rank + 1), dtype=int)
+folders              = [all_folders[ind] for ind in inds_folders]
+
+print('Reading {} folders: {}'.format(len(folders), folders), flush=True)
 
 # The output filename to save the collected data to.
-output_filename = input_args['output_filename']
+output_filename = '{}_{}.p'.format(input_args['output_filename'], rank)
 
 # Specify whether to save the full gradient descent
 # iteration data to file or only the final converged results.
@@ -572,3 +590,11 @@ df = pd.DataFrame(df_data)
     
 # Pickle the pandas DataFrame.
 df.to_pickle(output_filename)
+
+# Free memory.
+del df
+del df_data
+
+# Reset standard output and close the output file.
+sys.stdout = sys.__stdout__
+out_file.close()
