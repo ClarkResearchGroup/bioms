@@ -11,7 +11,7 @@ import scipy.sparse.linalg as ssla
 
 import qosy as qy
 
-from bioms.tools import arg, print_operator, lmatrix, expand_com, expand_anticom, compute_overlap_inds, project_vector, project
+from bioms.tools import arg, print_operator, lmatrix, expand_com, expand_anticom, compute_overlap_inds, project_vector, project, get_size
 
 # Check if about to run out of memory.
 # If so, empty the explored data.
@@ -73,7 +73,11 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     coeff_com_norm = arg(args, 'coeff_com_norm', 1.0)
     # The \\lambda_2 coefficient in front of |O^2 - I|^2
     coeff_binarity = arg(args, 'coeff_binarity', 1.0)
-
+    
+    # The size of the truncated basis to represent [H, \tau]
+    # when expanding by [H, [H, \tau]].
+    truncation_size = arg(args, 'truncation_size', None)
+    
     # The tolerance of the answer used as a convergence criterion for Newton's method.
     xtol = arg(args, 'xtol', 1e-6)
 
@@ -260,6 +264,12 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
             print('==== Iteration {}/{} ===='.format(ind_expansion+1, num_expansions), flush=True)
             print('Basis size: {}'.format(len(basis)), flush=True)
 
+        """
+        # FOR DEBUGGING: Print the memory footprint of the different variables.
+        for (var, var_name) in [(args['explored_com_data'], 'explored_com_data'), (args['explored_anticom_data'], 'explored_anticom_data'), (iteration_data, 'iteration_data'), (taus, 'taus'), (com_residual, 'com_residual'), (anticom_residual, 'anticom_residual'), (res_anticom_ext_basis, 'res_anticom_ext_basis')]:
+            print('{} memory = {} MB'.format(var_name, get_size(var)/1e9))
+        """
+
         ### Check that there is enough memory for the current expansion step.
         check_memory(args)
 
@@ -283,23 +293,26 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         del iteration_data
         iteration_data = None
 
-        ### Expand the basis.
-        old_basis = copy.deepcopy(basis)
-
-        # Expand by [H, [H, \tau]]
-        expand_com(H, com_residual, extended_basis, basis, dbasis//2, args['explored_com_data'])
-
-        # Expand by \{\tau, \tau\}
-        expand_anticom(anticom_residual, res_anticom_ext_basis, basis, dbasis//2)
-
-        # Project onto the new basis.
-        tau = project(basis, qy.Operator(taus[-1], old_basis))
-        tau = tau.coeffs.real / nla.norm(tau.coeffs.real)
-
+        ### On all but the last iteration, expand the basis:
+        if ind_expansion < num_expansions-1:
+            old_basis = copy.deepcopy(basis)
+            
+            # Expand by [H, [H, \tau]]
+            expand_com(H, com_residual, extended_basis, basis, dbasis//2, args['explored_com_data'], truncation_size=truncation_size, verbose=verbose)
+            
+            # Expand by \{\tau, \tau\}
+            if verbose:
+                print('|Basis of \\tau^2|             = {}'.format(len(res_anticom_ext_basis)), flush=True)
+            expand_anticom(anticom_residual, res_anticom_ext_basis, basis, dbasis//2)
+            
+            # Project onto the new basis.
+            tau = project(basis, qy.Operator(taus[-1], old_basis))
+            tau = tau.coeffs.real / nla.norm(tau.coeffs.real)
+        
         if verbose:
             print('\\tau = ', flush=True)
             print_operator(qy.Operator(tau, basis))
-
+        
         ### Do some book-keeping.
         # Keep track of how many \tau's were evaluated in the current expansion.
         num_taus_in_expansion.append(len(taus) - prev_num_taus)

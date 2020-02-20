@@ -221,15 +221,35 @@ def lmatrix(basis, H, explored_data, operation_mode='commutator'):
     return results
 
 # TODO: document
-def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_com_data):
+def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_com_data, truncation_size=None, verbose=False):
     """Expand the basis by commuting with the Hamiltonian H.
     Compute [H, [H, \tau]] and add the OperatorStrings with the
     largest coefficients to the basis.
     """
     
-    [L_H_ext, ext_ext_basis] = lmatrix(com_extended_basis, H, explored_com_data, operation_mode='commutator')
+    if verbose:
+        print('|Basis of \\tau|               = {}'.format(len(basis)), flush=True)
+        print('|Basis of [H,\\tau]|           = {}'.format(len(com_residual)), flush=True)
+
+    if truncation_size is not None:
+        vec_size = np.minimum(len(com_residual), truncation_size)
+        if verbose:
+            print('|Basis of truncated [H,\\tau]| = {}'.format(vec_size), flush=True)
+        
+        inds_sort = np.argsort(np.abs(com_residual))[::-1]
+        inds_sort = inds_sort[0:vec_size]
+        t_com_residual       = com_residual[inds_sort]
+        t_com_extended_basis = Basis([com_extended_basis[ind] for ind in inds_sort])
+    else:
+        t_com_residual       = com_residual
+        t_com_extended_basis = com_extended_basis
     
-    com_H_residual = L_H_ext.dot(com_residual)
+    [L_H_ext, ext_ext_basis] = lmatrix(t_com_extended_basis, H, explored_com_data, operation_mode='commutator')
+
+    if verbose:
+        print('|Basis of [H, [H, \\tau]]|     = {}'.format(len(ext_ext_basis)), flush=True)
+    
+    com_H_residual = L_H_ext.dot(t_com_residual)
     
     inds_sort = np.argsort(np.abs(com_H_residual))[::-1]
     ind_add   = 0
