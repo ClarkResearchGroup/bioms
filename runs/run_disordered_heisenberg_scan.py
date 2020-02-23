@@ -52,6 +52,12 @@ num_samples = args['num_samples']
 folder      = args['folder']
 ham_type    = args['ham_type']
 
+# The name of the output file to print info to.
+if 'out_name' in args:
+    out_name = args['out_name']
+else:
+    out_name = 'out.txt'
+    
 if ham_type == '1D_Heisenberg':
     N = L
 elif ham_type == '2D_Heisenberg':
@@ -77,7 +83,7 @@ if not os.path.isdir(folder):
     os.mkdir(folder)
 
 # Set the output file to pipe standard out to.
-out_file   = open('{}/out.txt'.format(folder), 'w')
+out_file   = open('{}/{}'.format(folder, out_name), 'w')
 sys.stdout = out_file
 
 nprocs = MPI.COMM_WORLD.Get_size()
@@ -119,6 +125,12 @@ for ind_sample in range(num_samples):
         W                        = Ws[ind_W]
         args['W']                = W
         args['results_filename'] = '{}/{}.p'.format(folder, ind_file)
+        
+        # Skip this calculation if it has already been performed.
+        if os.path.isfile(args['results_filename']):
+            print('Skipping calculation since it has already been done!', flush=True)
+            ind_file += 1
+            continue
         
         # Hard-coded parameters for Heisenberg model.
         J_xy = 1.0
