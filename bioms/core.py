@@ -13,6 +13,11 @@ import qosy as qy
 
 from bioms.tools import arg, print_operator, lmatrix, expand_com, expand_anticom, compute_overlap_inds, project_vector, project, get_size
 
+# Print info about memory usage.
+def print_memory_usage():
+    vmem = dict(psutil.virtual_memory()._asdict())
+    print('vmem = {}'.format(vmem), flush=True)
+
 # Check if about to run out of memory.
 # If so, empty the explored data.
 def check_memory(args):
@@ -65,6 +70,8 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     
     # If using more than the RAM threshold, empty the explored data.
     #check_memory(args)
+    if verbose:
+        print_memory_usage()
     
     # The OperatorString type to use in all calculations.
     global_op_type = arg(args, 'global_op_type', 'Majorana')
@@ -269,6 +276,9 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         for (var, var_name) in [(args['explored_com_data'], 'explored_com_data'), (args['explored_anticom_data'], 'explored_anticom_data'), (iteration_data, 'iteration_data'), (taus, 'taus'), (com_residual, 'com_residual'), (anticom_residual, 'anticom_residual'), (res_anticom_ext_basis, 'res_anticom_ext_basis')]:
             print('{} memory = {} MB'.format(var_name, get_size(var)/1e9))
         """
+        
+        if verbose:
+            print_memory_usage()
         
         ### Compute the relevant quantities in the current basis.
         [L_H, extended_basis] = lmatrix(basis, H, args['explored_com_data'], operation_mode='commutator')

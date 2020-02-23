@@ -1,13 +1,15 @@
 {
-    "L"              : 7,
+    "L"              : 11,
     "ham_type"       : "3D_Heisenberg",
     "periodic"       : true,
     "start_mode"     : "constant",
-    "Ws"             : [30.0],
+    "Ws"             : [30.0, 60.0, 70.0],
     "num_samples"    : 1,
-    "folder"         : "run3D_test",
+    "folder"         : "run3D_test6",
+    "out_name"       : "out_test.txt",
 
     "dbasis"         : 200,
+    "truncation_size": 2000,
     "num_expansions" : 12,
     "xtol"           : 1e-6,
     "coeff_com_norm" : 1.0,
