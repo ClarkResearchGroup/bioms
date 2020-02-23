@@ -64,7 +64,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     percent_mem_threshold = arg(args, 'percent_mem_threshold', 85.0)
     
     # If using more than the RAM threshold, empty the explored data.
-    check_memory(args)
+    #check_memory(args)
     
     # The OperatorString type to use in all calculations.
     global_op_type = arg(args, 'global_op_type', 'Majorana')
