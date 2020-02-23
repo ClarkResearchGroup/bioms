@@ -269,10 +269,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         for (var, var_name) in [(args['explored_com_data'], 'explored_com_data'), (args['explored_anticom_data'], 'explored_anticom_data'), (iteration_data, 'iteration_data'), (taus, 'taus'), (com_residual, 'com_residual'), (anticom_residual, 'anticom_residual'), (res_anticom_ext_basis, 'res_anticom_ext_basis')]:
             print('{} memory = {} MB'.format(var_name, get_size(var)/1e9))
         """
-
-        ### Check that there is enough memory for the current expansion step.
-        check_memory(args)
-
+        
         ### Compute the relevant quantities in the current basis.
         [L_H, extended_basis] = lmatrix(basis, H, args['explored_com_data'], operation_mode='commutator')
         C_H = (L_H.H).dot(L_H)
