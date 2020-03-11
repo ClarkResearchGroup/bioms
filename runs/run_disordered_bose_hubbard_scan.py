@@ -135,11 +135,6 @@ for ind_sample in range(num_samples):
             ind_file += 1
             continue
         
-        # Hard-coded parameters for the hard-core Bose-Hubbard model,
-        # which is -2 * XX-model
-        J_xy = -2.0
-        J_z  =  0.0
-        
         # The Heisenberg chain.
         if ham_type == '2D':
             H = bioms.bose_hubbard_square(L, periodic=periodic)
@@ -150,7 +145,7 @@ for ind_sample in range(num_samples):
         # For the Bose-Hubbard model, W is the full-width-half-maximum
         # of a Gaussian distribution, which is related to the standard
         # deviation s by s = W/(2 * sqrt(2 * log(2))).
-        std_dev = W / (2.0 * np.sqrt(2.0 * np.log(2.0)))
+        std_dev = W / (2.0 * np.sqrt(2.0 * np.log(2.0) ) )
         H += bioms.magnetic_fields(std_dev * random_potentials)
         
         # The initial operator centered at the center of the lattice.
