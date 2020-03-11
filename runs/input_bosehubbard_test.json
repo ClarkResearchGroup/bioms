@@ -1,0 +1,21 @@
+{
+    "L"              : 21,
+    "ham_type"       : "2D",
+    "periodic"       : true,
+    "start_mode"     : "constant",
+    "Ws"             : [18.3, 100.0],
+    "num_samples"    : 1,
+    "folder"         : "run2D_bosehubbard_test",
+
+    "dbasis"         : 200,
+    "truncation_size": 2000,
+    "num_expansions" : 12,
+    "xtol"           : 1e-6,
+    "coeff_com_norm" : 1.0,
+    "coeff_binarity" : 1.0,
+    "global_op_type" : "Pauli",
+
+    
+    "percent_mem_threshold" : 96.0,
+    "verbose"               : true
+}
