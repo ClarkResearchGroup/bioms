@@ -443,13 +443,13 @@ for folder in folders:
         L              = args['L']
         explored_basis = args['explored_basis']
 
-        if args['ham_type'] == '1D_Heisenberg':
+        if args['ham_type'] == '1D_Heisenberg' or args['ham_type'] == '1D':
             lattice_type = '1D_chain'
             N            = L
-        elif args['ham_type'] == '2D_Heisenberg':
+        elif args['ham_type'] == '2D_Heisenberg' or args['ham_type'] == '2D':
             lattice_type = '2D_square'
             N            = L * L
-        elif args['ham_type'] == '3D_Heisenberg':
+        elif args['ham_type'] == '3D_Heisenberg' or args['ham_type'] == '3D':
             lattice_type = '3D_cubic'
             N            = L * L * L
         else:
