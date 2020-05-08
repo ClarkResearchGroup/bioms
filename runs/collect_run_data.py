@@ -105,48 +105,70 @@ def lbit_energy(random_potentials, operator, N):
     
 # Compute the "weight" of an operator,
 # the probability of each site being
-# a non-identity operator.
+# a non-identity operator. (default uses L2-norm)
 def operator_weights(operator, num_orbitals, mode=None):
     row_inds = []
     data     = []
     for (coeff, op_string) in operator:
         if mode == 'Z':
             if len(op_string.orbital_operators) == 1 and op_string.orbital_operators[0] == 'Z':
-                weight    = np.abs(coeff)**2.0
+                weight    = np.abs(coeff)**2.0 # sum of absolute values squared
                 orb_label = op_string.orbital_labels[0]
                 
                 data.append(weight)
                 row_inds.append(orb_label)
+        elif mode == 'Z_ABS':
+            if len(op_string.orbital_operators) == 1 and op_string.orbital_operators[0] == 'Z':
+                weight    = np.abs(coeff) # sum of absolute values (l_1-norm)
+                orb_label = op_string.orbital_labels[0]
+                
+                data.append(weight)
+                row_inds.append(orb_label)
+        elif mode == 'ABS':
+            for (op_name, orb_label) in op_string:
+                weight = np.abs(coeff) # sum of absolute values (l_1-norm)
+
+                data.append(weight)
+                row_inds.append(orb_label)
         else:
             for (op_name, orb_label) in op_string:
-                weight = np.abs(coeff)**2.0
+                weight = np.abs(coeff)**2.0 # sum of absolute values squared
 
                 data.append(weight)
                 row_inds.append(orb_label)
     col_inds = np.zeros(len(row_inds), dtype=int) 
     weights  = ss.csr_matrix((data, (row_inds, col_inds)), shape=(num_orbitals, 1), dtype=float)
-
+    
     # Normalize to be a probability distribution.
     weights /= weights.sum()
-
+    
     return weights
 
 # Compute the "localities" of an operator O = \sum_a g_a S_a,
 # the probability \sum_{a for k-local S_a} g_a^2/\sum_b g_b^2
+# or \sum_{a for k-local S_a} |g_a|/\sum_b |g_b|
 # of an operator string S_a in the expansion being k-local.
-def operator_localities(operator, num_orbitals):
-    localities = np.zeros(num_orbitals) + 1e-16
+def operator_localities(operator, num_orbitals, mode=None):
     data       = np.zeros(len(operator))
     row_inds   = np.zeros(len(operator), dtype=int)
     col_inds   = np.zeros(len(operator), dtype=int)
     ind_os     = 0
+    
+    if mode == 'ABS':
+        op_norm = np.sum(np.abs(operator.coeffs)) # weighted by absolute value
+    else:
+        op_norm = operator.norm()
+        
     for (coeff, op_string) in operator:
         # The integer k for a k-local operator string,
         # i.e., the number of sites that the operator
         # string acts on.
         k = len(op_string.orbital_operators)
 
-        data[ind_os]     = np.abs(coeff)**2.0
+        if mode == 'ABS':
+            data[ind_os] = np.abs(coeff/op_norm) # weighted by absolute value
+        else:
+            data[ind_os] = np.abs(coeff/op_norm)**2.0 # weighted by absolute value squared
         row_inds[ind_os] = k
         
         ind_os += 1
@@ -157,6 +179,70 @@ def operator_localities(operator, num_orbitals):
     localities /= localities.sum()
     
     return localities
+
+# Compute the "amplitude ranges" of an operator O = \sum_a g_a S_a,
+# the (normalized) probability A_R ~ \sum_{a for range R S_a} |g_a|
+# where R is the maximum distance of the operator string from the center site
+# as measured by an L1 or L2-norm distance.
+def operator_amplitude_ranges(operator, num_orbitals, lattice_type, L, mode=None):
+    if lattice_type == '1D_chain':
+        N = L
+        def coords(site):
+            return np.array([site], dtype=float)
+    elif lattice_type == '2D_square':
+        N = L * L
+        def coords(site):
+            nonlocal L
+            return np.array([site % L, site // L], dtype=float)
+    elif lattice_type == '3D_cubic':
+        N = L * L * L
+        def coords(site):
+            nonlocal L
+            return np.array([site % L, (site % (L * L)) // L, site // (L * L)], dtype=float)
+    else:
+        raise ValueError('Invalid lattice_type: {}'.format(lattice_type))
+    
+    site0 = N//2
+    pos0  = coords(site0)
+    
+    data       = np.zeros(len(operator))
+    row_inds   = np.zeros(len(operator), dtype=int)
+    col_inds   = np.zeros(len(operator), dtype=int)
+    ind_os     = 0
+    for (coeff, op_string) in operator:
+        # The range R for the operator string,
+        # i.e., the distance of the farthest site
+        # in the operator string from the origin.
+        R_max    = 0.0
+        site_max = site0
+        for site in op_string.orbital_labels:
+            pos = coords(site)
+            if mode == 'L1':
+                R_site = np.sum(np.abs(pos - pos0))
+            else:
+                R_site = nla.norm(pos - pos0)
+                
+            if R_site > R_max:
+                R_max    = R_site
+                site_max = site
+            
+        # Note: The indexing is done by keeping track of the
+        # site in the operator string that is farthest
+        # from site0. Later, when processing the data,
+        # this site-indexing can be converted back to
+        # range's R using the coords() function above.
+        
+        data[ind_os]     = np.abs(coeff)
+        row_inds[ind_os] = site_max
+        
+        ind_os += 1
+        
+    amp_ranges = ss.csr_matrix((data, (row_inds, col_inds)), shape=(num_orbitals,1), dtype=float)
+    
+    # Don't normalize to be a probability distribution. You can normalize it later if you want.
+    # amp_ranges /= amp_ranges.sum()
+    
+    return amp_ranges
 
 # Compute the inverse participation ratio. For a
 # probability distribution p_i with \sum_i p_i = 1,
@@ -173,13 +259,17 @@ def inverse_participation_ratio(probabilities):
 
 # Find the maximal distance between the orbital
 # operators in an operator string.
-def os_max_distance(op_string, coord_fun):
+def os_max_distance(op_string, coord_fun, mode=None):
     os_range = 0.0
     for (orb_name1, orb_label1) in op_string:
         coords1 = coord_fun(orb_label1)
         for (orb_name2, orb_label2) in op_string:
             coords2  = coord_fun(orb_label2)
-            os_range = np.maximum(os_range, nla.norm(coords1 - coords2))
+            if mode == 'L1':
+                dist = np.sum(np.abs(coords1 - coords2))
+            else:
+                dist = nla.norm(coords1 - coords2)
+            os_range = np.maximum(os_range, dist)
     return os_range
 
 # Find the distance between the orbital
@@ -237,10 +327,28 @@ def operator_range(operator, L, lattice_type, range_type):
     # range_types = ['average', 'maximum', 'maximum_maximum_radius', 'maximum_com_radius', 'average_maximum_radius', 'average_minimum_radius', 'average_com_radius']
     op_norm  = operator.norm()
     op_range = 0.0
+    # Find the average range weighted by |c_i|^2
     if range_type == 'average':
         for (coeff, op_string) in operator:
             os_range  = os_max_distance(op_string, coords)
-            op_range += np.abs(coeff/op_norm)**2.0 * os_range
+            op_range += np.abs(coeff/op_norm)**2.0 * os_range # \sum_i |c_i|^2 r_i
+    # Find the average range weighted by |c_i| instead of |c_i|^2.
+    elif range_type == 'average_abs':
+        op_norm = np.sum(np.abs(operator.coeffs)) # Different normalization so that \sum_i |c_i| = 1
+        for (coeff, op_string) in operator:
+            os_range  = os_max_distance(op_string, coords)
+            op_range += np.abs(coeff/op_norm) * os_range # \sum_i |c_i| r_i
+    # Find the average l1-range weighted by |c_i|^2
+    elif range_type == 'average_l1':
+        for (coeff, op_string) in operator:
+            os_range  = os_max_distance(op_string, coords, mode='L1')
+            op_range += np.abs(coeff/op_norm)**2.0 * os_range # \sum_i |c_i|^2 r_i^{L1}
+    # Find the average l1-range weighted by |c_i| instead of |c_i|^2.
+    elif range_type == 'average_abs_l1':
+        op_norm = np.sum(np.abs(operator.coeffs)) # Different normalization so that \sum_i |c_i| = 1
+        for (coeff, op_string) in operator:
+            os_range  = os_max_distance(op_string, coords, mode='L1')
+            op_range += np.abs(coeff/op_norm) * os_range # \sum_i |c_i| r_i^{L1}
     # Find the maximum distance between the endpoints of
     # the operator strings in the operator.
     elif range_type == 'maximum':
@@ -277,7 +385,6 @@ def operator_range(operator, L, lattice_type, range_type):
             
     return op_range
 
-# TODO: test!
 # Performs an exponential fit
 # for the weights of the 1D lbit.
 def exp_fit(weights, L, lattice_type):
@@ -303,7 +410,9 @@ def exp_fit(weights, L, lattice_type):
         
         # TODO: write jacobian
         #def jac_func(x, a, b):
-        #    return np.array()
+        #    nonlocal x0
+        #    fxa = func(x, a)
+        #    return np.reshape(1.0/(a**2.0) * fxa * (np.abs(x-x0) - np.sum(np.abs(x-x0) * fxa)), (len(x), 1))
         
         try:
             popt, pcov = so.curve_fit(func, x, y, bounds=(1e-16, L))
@@ -487,19 +596,58 @@ for folder in folders:
             op_strings          = [explored_basis[ind_os] for ind_os in inds_explored_basis]
             operator            = qy.Operator(coeffs, op_strings)
             
-            # The weight of the operator on each site.
+            # The weights \sum_i |c_i|^2 of the operator on each site i.
             weights = operator_weights(operator, N)
 
-            # The weights of the single-site Pauli Z matrices on each site.
+            # The weights \sum_i |c_i^z|^2 of the single-site Pauli Z matrices on each site.
             weights_z = operator_weights(operator, N, mode='Z')
+
+            # The weights  \sum_i |c_i| of the operator on each site.
+            weights_abs = operator_weights(operator, N, mode='ABS')
+
+            # The weights \sum_i |c_i^z| of the single-site Pauli Z matrices on each site.
+            weights_z_abs = operator_weights(operator, N, mode='Z_ABS')
             
-            # The distribution of k-local operator strings in the operator.
+            # The distribution of k-local operator strings in the operator,
+            # weighted by |c_i|^2.
             localities = operator_localities(operator, N)
 
-            # The operator inverse participation ratio
-            # based on the weights.
-            op_ipr = inverse_participation_ratio(weights)
+            # The distribution of k-local operator strings in the operator,
+            # weighted by |c_i|.
+            localities_abs = operator_localities(operator, N, mode='ABS')
 
+            # The sum of the absolute values of the amplitudes of the operator strings
+            # in the operator that extend to a range R measured using an L2-norm (Euclidean distance)
+            amp_ranges = operator_amplitude_ranges(operator, N, lattice_type, L)
+
+            # The sum of the absolute values of the amplitudes of the operator strings
+            # in the operator that extend to a range R measured using an L1-norm (Manhattan distance)
+            amp_ranges_l1 = operator_amplitude_ranges(operator, N, lattice_type, L, mode='L1')
+            
+            # The operator inverse participation ratio
+            # based on weights.
+            op_ipr = inverse_participation_ratio(weights)
+            
+            # The operator inverse participation ratio
+            # based on weights_z.
+            op_ipr_z = inverse_participation_ratio(weights_z)
+            
+            # The operator inverse participation ratio
+            # based on weights_abs.
+            op_ipr_abs = inverse_participation_ratio(weights_abs)
+            
+            # The operator inverse participation ratio
+            # based on weights_z_abs.
+            op_ipr_z_abs = inverse_participation_ratio(weights_z_abs)
+            
+            # The operator inverse participation ratio
+            # based on amp_ranges.
+            op_ipr_amp_ranges = inverse_participation_ratio(amp_ranges)
+            
+            # The operator inverse participation ratio
+            # based on amp_ranges_l1.
+            op_ipr_amp_ranges_l1 = inverse_participation_ratio(amp_ranges_l1)
+            
             # The zero-th order l-bit "energy".
             random_potentials = args['random_potentials']
             op_energy         = lbit_energy(random_potentials, operator, N)
@@ -507,7 +655,7 @@ for folder in folders:
             # The distribution of "ranges" of the operator. There are many
             # different types I calculate, so save them to a dictionary.
             range_dict  = dict()
-            range_types = ['average', 'maximum', 'maximum_maximum_radius', 'maximum_com_radius', 'average_maximum_radius', 'average_minimum_radius', 'average_com_radius']
+            range_types = ['average', 'average_abs', 'average_l1', 'average_abs_l1', 'maximum', 'maximum_maximum_radius', 'maximum_com_radius', 'average_maximum_radius', 'average_minimum_radius', 'average_com_radius']
             for range_type in range_types:
                 range_dict[range_type+'_range'] = operator_range(operator, L, lattice_type, range_type)
             
@@ -519,7 +667,27 @@ for folder in folders:
             # Find an exponential fit of the weights_z.
             [opt_params_z, opt_covs_z] = exp_fit(weights_z, L, lattice_type)
             corr_length_z              = opt_params_z[0]
-            corr_length_z_err          = np.sqrt(np.abs(opt_covs_z[0,0])) 
+            corr_length_z_err          = np.sqrt(np.abs(opt_covs_z[0,0]))
+
+            # Find an exponential fit of the weights_abs.
+            [opt_params_abs, opt_covs_abs] = exp_fit(weights_abs, L, lattice_type)
+            corr_length_abs               = opt_params_abs[0]
+            corr_length_abs_err           = np.sqrt(np.abs(opt_covs_abs[0,0]))
+
+            # Find an exponential fit of the weights_z_abs.
+            [opt_params_z_abs, opt_covs_z_abs] = exp_fit(weights_z_abs, L, lattice_type)
+            corr_length_z_abs                 = opt_params_z_abs[0]
+            corr_length_z_abs_err             = np.sqrt(np.abs(opt_covs_z_abs[0,0]))
+            
+            # Find an exponential fit of the (normalized) amp_ranges.
+            [opt_params_amp_ranges, opt_covs_amp_ranges] = exp_fit(amp_ranges / amp_ranges.sum(), L, lattice_type)
+            corr_length_amp_ranges                       = opt_params_amp_ranges[0]
+            corr_length_amp_ranges_err                   = np.sqrt(np.abs(opt_covs_amp_ranges[0,0]))
+            
+            # Find an exponential fit of the (normalized) amp_ranges_l1.
+            [opt_params_amp_ranges_l1, opt_covs_amp_ranges_l1] = exp_fit(amp_ranges_l1 / amp_ranges_l1.sum(), L, lattice_type)
+            corr_length_amp_ranges_l1                          = opt_params_amp_ranges_l1[0]
+            corr_length_amp_ranges_l1_err                      = np.sqrt(np.abs(opt_covs_amp_ranges_l1[0,0]))
             
             # The histogram of the amplitudes of the operator on each operator string.
             (coeff_hist, bin_edges) = np.histogram(-np.log(np.abs(coeffs)+1e-16)/np.log(10.0), bins = np.linspace(0.0, 16.0, 17))
@@ -542,6 +710,11 @@ for folder in folders:
                 'binarity'              : results_data['binarities'][ind_tau], \
                 'tau_norm'              : results_data['tau_norms'][ind_tau], \
                 'op_ipr'                : op_ipr, \
+                'op_ipr_z'              : op_ipr_z, \
+                'op_ipr_abs'            : op_ipr_abs, \
+                'op_ipr_z_abs'          : op_ipr_z_abs, \
+                'op_ipr_amp_ranges'     : op_ipr_amp_ranges, \
+                'op_ipr_amp_ranges_l1'  : op_ipr_amp_ranges_l1, \
                 'op_energy'             : op_energy, \
                 'fidelity'              : fidelity, \
                 'initial_fidelity'      : results_data['initial_fidelities'][ind_tau], \
@@ -550,12 +723,25 @@ for folder in folders:
                 'basis_size'            : results_data['basis_sizes'][ind_expansion], \
                 'weights'               : weights, \
                 'weights_z'             : weights_z, \
+                'weights_abs'           : weights_abs, \
+                'weights_z_abs'         : weights_z_abs, \
                 'localities'            : localities, \
+                'localities_abs'        : localities_abs, \
+                'amp_ranges'            : amp_ranges, \
+                'amp_ranges_l1'         : amp_ranges_l1, \
                 'coeff_hist'            : coeff_hist, \
                 'corr_length'           : corr_length, \
                 'corr_length_err'       : corr_length_err, \
                 'corr_length_z'         : corr_length_z, \
                 'corr_length_z_err'     : corr_length_z_err, \
+                'corr_length_abs'       : corr_length_abs, \
+                'corr_length_abs_err'   : corr_length_abs_err, \
+                'corr_length_z_abs'     : corr_length_z_abs, \
+                'corr_length_z_abs_err' : corr_length_z_abs_err, \
+                'corr_length_amp_ranges'        : corr_length_amp_ranges, \
+                'corr_length_amp_ranges_err'    : corr_length_amp_ranges_err, \
+                'corr_length_amp_ranges_l1'     : corr_length_amp_ranges_l1, \
+                'corr_length_amp_ranges_l1_err' : corr_length_amp_ranges_l1_err, \
                 'ind_tau'               : ind_tau, \
                 'ind_expansion'         : ind_expansion, \
                 'num_taus'              : num_taus, \
