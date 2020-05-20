@@ -11,34 +11,14 @@ import scipy.sparse.linalg as ssla
 
 import qosy as qy
 
-from bioms.tools import arg, print_operator, lmatrix, expand_com, expand_anticom, compute_overlap_inds, project_vector, project, get_size
+from bioms.tools import arg, print_operator, lmatrix, expand_com, expand_anticom, compute_overlap_inds, project_vector, project, get_size, finite_diff_gradient, finite_diff_hessian
 
 # Print info about memory usage.
 def print_memory_usage():
     vmem = dict(psutil.virtual_memory()._asdict())
     print('vmem = {}'.format(vmem), flush=True)
-
-# Check if about to run out of memory.
-# If so, empty the explored data.
-def check_memory(args):
-    vmem             = dict(psutil.virtual_memory()._asdict())
-    percent_mem_used = float(vmem['percent'])
-    if args['verbose']:
-        print('vmem = {}'.format(vmem), flush=True)
-
-        if percent_mem_used > args['percent_mem_threshold']:
-            print('== EMPTYING MEMORY (percent mem used = {} > {}). =='.format(percent_mem_used, args['percent_mem_threshold']), flush=True)
-            
-            del args['explored_com_data']
-            del args['explored_anticom_data']
-            
-            args['explored_com_data']     = [qy.Basis(), qy.Basis(), dict()]
-            args['explored_anticom_data'] = [qy.Basis(), qy.Basis(), dict()]
-            
-            vmem = dict(psutil.virtual_memory()._asdict())
-            print('== vmem after emptying = {} =='.format(vmem), flush=True)
     
-def find_binary_iom(hamiltonian, initial_op, args=None):
+def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False, _check_quantities=False):
     """Find an approximate binary integral of motion O by iteratively
        minimizing the objective function
           \\lambda_1 |[H, O]|^2 + \\lambda_2 |O^2 - I|^2
@@ -57,13 +37,15 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
 
     # Flag whether to print output for the run.
     verbose = arg(args, 'verbose', False)
-
+    
     # The "explored" commutation and anticommutation relations
     # saved so far in the calculation. Used as a look-up table.
+    if ('explored_basis' not in args) or (args['explored_basis'] is None):
+        args['explored_basis'] = qy.Basis()
     if ('explored_com_data' not in args) or (args['explored_com_data'] is None):
-        args['explored_com_data'] = [qy.Basis(), qy.Basis(), dict()]
+        args['explored_com_data'] = dict()
     if ('explored_anticom_data' not in args) or (args['explored_anticom_data'] is None):
-        args['explored_anticom_data'] = [qy.Basis(), qy.Basis(), dict()]
+        args['explored_anticom_data'] = dict()
     
     # The RAM threshold.
     percent_mem_threshold = arg(args, 'percent_mem_threshold', 85.0)
@@ -74,7 +56,8 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         print_memory_usage()
     
     # The OperatorString type to use in all calculations.
-    global_op_type = arg(args, 'global_op_type', 'Majorana')
+    # Defaults to the type of the intial_op.
+    global_op_type = arg(args, 'global_op_type', initial_op.op_type)
 
     # The \\lambda_1 coefficient in front of |[H, O]|^2
     coeff_com_norm = arg(args, 'coeff_com_norm', 1.0)
@@ -105,7 +88,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
 
     ### INITIALIZE THE HAMILTONIAN AND IOM ###
     # The Hamiltonian H that we are considering.
-    H = qy.convert(hamiltonian, global_op_type)
+    H = qy.convert(copy.deepcopy(hamiltonian), global_op_type)
     
     # The binary integral of motion \\tau that we are finding.
     tau        = qy.convert(copy.deepcopy(initial_op), global_op_type)
@@ -126,6 +109,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     # Variables to update at each step of the optimization.
     com_norm = None
     binarity = None
+    obj_val  = None
     com_residual          = None
     anticom_residual      = None
     res_anticom_ext_basis = None
@@ -137,46 +121,86 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     def updated_iteration_data(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal iteration_data, res_anticom_ext_basis
+        nonlocal basis, iteration_data, res_anticom_ext_basis, args
         
         if iteration_data is not None and np.allclose(y, iteration_data[0], atol=1e-14):
             return iteration_data
         else:
-            [Lbar_tau, res_anticom_ext_basis] = lmatrix(basis, qy.Operator(y, basis), args['explored_anticom_data'], operation_mode='anticommutator')
+            [Lbar_tau, res_anticom_ext_basis] = lmatrix(basis, qy.Operator(y, basis), args['explored_basis'], args['explored_anticom_data'], operation_mode='anticommutator')
             iteration_data = [np.copy(y), Lbar_tau]
-
+            
             return iteration_data
 
     def obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, L_H, com_norm, binarity, com_residual, anticom_residual, res_anticom_ext_basis
-
+        nonlocal basis, L_H, com_norm, binarity, obj_val, com_residual, anticom_residual, res_anticom_ext_basis, identity, _check_quantities
+        
         com_residual = L_H.dot(y)
         com_norm     = nla.norm(com_residual)**2.0
-
+        
         [_, Lbar_tau] = updated_iteration_data(y)
-
+        
         ind_identity = res_anticom_ext_basis.index(identity)
-
+        
         anticom_residual = 0.5 * Lbar_tau.dot(y)
         anticom_residual[ind_identity] -= 1.0
         binarity = nla.norm(anticom_residual)**2.0
+        
+        # For debugging, check that commutator norm and binarity are correct:
+        if _check_quantities:
+            optest         = qy.Operator(y, basis)
+            id_op          = qy.Operator([1.], [identity])
+            com_norm_check = qy.commutator(H, optest).norm() ** 2.0
+            optest_sqr     = 0.5 * qy.anticommutator(optest, optest)
+            binarity_check = (optest_sqr - id_op).norm() ** 2.0
+            print('com_norm = {}, com_norm_check = {}'.format(com_norm, com_norm_check), flush=True)
+            print('binarity = {}, binarity_check = {}'.format(binarity, binarity_check), flush=True)
+            
+            # Check that what the algorithm (bioms) thinks is O^2-I
+            # agrees with what a brute-force calculation (qosy) thinks is O^2-I.
 
-        obj = coeff_com_norm * com_norm + coeff_binarity * binarity
+            # Check that they include the same operator strings.
+            check_os = True
+            for (_, os_) in optest_sqr:
+                if os_ not in res_anticom_ext_basis:
+                    print('res_anticom_ext_basis is missing {}'.format(os_))
+                    check_os = False
+            for os_ in res_anticom_ext_basis:
+                if os_ not in optest_sqr._basis and os_ != identity:
+                    coeff_ = anticom_residual[res_anticom_ext_basis.index(os_)]
+                    if np.abs(coeff_) > 1e-12:
+                        print('res_anticom_ext_basis has an extra operator {}'.format(os_))
+                        check_os = False
+            if not check_os:
+                print('\nO = ', flush=True)
+                print_operator(qy.Operator(y, basis), np.inf)
 
-        return obj
+                print('\nWhat bioms thinks is O^2-I = ', flush=True)
+                print_operator(qy.Operator(anticom_residual, res_anticom_ext_basis), np.inf)
+
+                print('\nWhat qosy thinks is O^2-I =', flush=True)
+                print_operator(optest_sqr - id_op, np.inf)
+            assert(check_os)
+
+            assert(np.abs(com_norm - com_norm_check) < 1e-12)
+            assert(np.abs(binarity - binarity_check) < 1e-5)
+        
+        obj_val = coeff_com_norm * com_norm + coeff_binarity * binarity
+
+        return obj_val
 
     # Specifies the gradient \partial_a Z of the objective function
     # Z = \\lambda_1 |[H, O]|^2 + \\lambda_2 |O^2 - I|^2,
     # where O=\sum_a g_a S_a.
+    _checked_grad = False
     def grad_obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, C_H, res_anticom_ext_basis
+        nonlocal basis, C_H, res_anticom_ext_basis, identity, _check_derivatives, _checked_grad
         
         [_, Lbar_tau] = updated_iteration_data(y)
-
+        
         ind_identity = res_anticom_ext_basis.index(identity)
         Lbar_vec     = Lbar_tau[ind_identity, :]
         Lbar_vec     = Lbar_vec.real
@@ -185,53 +209,80 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
                    + coeff_binarity * ((Lbar_tau.H).dot(Lbar_tau.dot(y)) - 2.0 * Lbar_vec)
         grad_obj = np.array(grad_obj).flatten().real
 
+        # For debugging, check the derivatives against finite-difference derivatives.
+        if _check_derivatives and not _checked_grad:
+            fd_grad_obj = finite_diff_gradient(obj, y, eps=1e-5)
+            
+            print('fd_grad_obj = {}'.format(fd_grad_obj))
+            print('grad_obj    = {}'.format(grad_obj))
+            err_grad = nla.norm(fd_grad_obj - grad_obj)
+            print('err_grad = {}'.format(err_grad))
+            
+            assert(err_grad < 1e-8)
+            
+            _checked_grad = True
+
         return grad_obj
 
+    _checked_hess = False
     def hess_obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, C_H, args
+        nonlocal basis, C_H, args, res_anticom_ext_basis, identity, _check_derivatives, _checked_hess
 
-        [explored_basis, explored_extended_basis, explored_s_constants_data] = args['explored_anticom_data']
+        explored_s_constants = args['explored_anticom_data']
 
         [_, Lbar_tau] = updated_iteration_data(y)
         Cbar_tau = (Lbar_tau.H).dot(Lbar_tau)
-
+        
         # The part of the Hessian due to the commutator norm.
         hess_obj = coeff_com_norm * (2.0 * C_H)
-
+        
         # The first part of the Hessian due to the binarity.
         hess_obj += coeff_binarity * (2.0 * Cbar_tau)
-
+        
         # The index in the extended basis of the identity operator.
         ind_identity = res_anticom_ext_basis.index(identity)
-
+        
         # Vector representation of {\\tau, \\tau} in the extended basis.
         Lbar_vec = Lbar_tau.dot(y)
-
+        
         # The final terms to add to the Hessian due to the binarity.
         terms = np.zeros((len(y), len(y)), dtype=complex)
-
+        
         # The remaining parts of the Hessian due to the binarity.
-        for ind1 in range(len(basis)):
-            os1 = basis[ind1]
-            [inds_explored_eb, inds_explored_b, exp_data] = explored_s_constants_data[os1]
-            for (ind_x_eb, ind_x_b, datum) in zip(inds_explored_eb, inds_explored_b, exp_data):
-                os2 = explored_basis[ind_x_b]
-                if os2 in basis:
-                    ind2 = basis.index(os2)
+        for indB in range(len(basis)):
+            osB = basis[indB]
+            for indA in range(len(basis)):
+                osA = basis[indA]
+                
+                keyBA         = (osB, osA)
+                (coeffC, osC) = explored_s_constants[keyBA]
 
-                    os_eb = explored_extended_basis[ind_x_eb]
-                    ind3  = res_anticom_ext_basis.index(os_eb)
+                if osC is not None:
+                    indC = res_anticom_ext_basis.index(osC)
 
-                    terms[ind1, ind2] += datum * Lbar_vec[ind3]
-                    if ind3 == ind_identity:
-                        terms[ind1, ind2] += -2.0 * datum
-
+                    terms[indB, indA] += coeffC * np.conj(Lbar_vec[indC])
+                    if indC == ind_identity:
+                        terms[indB, indA] += -2.0 * np.conj(coeffC)
+        
         # The final terms added to the Hessian.
         hess_obj += coeff_binarity * terms
 
         hess_obj = np.array(hess_obj).real
+
+        # For debugging, check the derivatives against finite-difference derivatives.
+        if _check_derivatives and not _checked_hess:
+            fd_hess_obj = finite_diff_hessian(grad_obj, y, eps=1e-4)
+            
+            print('fd_hess_obj = {}'.format(fd_hess_obj))
+            print('hess_obj    = {}'.format(hess_obj))
+            err_hess = nla.norm(fd_hess_obj - hess_obj)
+            print('err_hess = {}'.format(err_hess))
+            
+            assert(err_hess < 1e-6)
+            
+            _checked_hess = True
 
         return hess_obj
 
@@ -239,22 +290,37 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
     binarities = []
     taus       = []
     tau_norms  = []
+    objs       = []
     def update_vars(y):
-        nonlocal com_norms, binarities, taus, tau_norms, iteration_data
+        nonlocal com_norms, binarities, taus, tau_norms, objs, iteration_data, com_norm, obj_val, binarity, _checked_grad, _checked_hess
         # Ensure that the nonlocal variables are updated properly.
+
         # Make sure that the vector is normalized here.
+        taus.append(y/nla.norm(y))
         tau_norms.append(nla.norm(y))
+        objs.append(obj_val)
+        
+        obj_val_original = obj_val
+        
+        # Called to recompute com_norm and binarity with
+        # a normalized tau operator.
         obj(y/nla.norm(y))
+        
         com_norms.append(com_norm)
         binarities.append(binarity)
-        taus.append(y/nla.norm(y))
-
+        
         # Reset the iteration data.
         del iteration_data
         iteration_data = None
 
         if verbose:
-            print(' (|\\tau| = {}, com_norm = {}, binarity = {})'.format(nla.norm(y), com_norm, binarity), flush=True)
+            print(' (obj = {}, |\\tau| = {}, com_norm = {}, binarity = {})'.format(obj_val_original, nla.norm(y), com_norm, binarity), flush=True)
+
+        # Reset the _checked derivatives flags so that you can check the
+        # derivatives against finite difference in the next step if
+        # _check_derivatives=True.
+        _checked_grad = False
+        _checked_hess = False
 
     ### DEFINE THE FUNCTIONS USED IN THE OPTIMIZATION ###
 
@@ -270,23 +336,16 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         if verbose:
             print('==== Iteration {}/{} ===='.format(ind_expansion+1, num_expansions), flush=True)
             print('Basis size: {}'.format(len(basis)), flush=True)
-
-        """
-        # FOR DEBUGGING: Print the memory footprint of the different variables.
-        for (var, var_name) in [(args['explored_com_data'], 'explored_com_data'), (args['explored_anticom_data'], 'explored_anticom_data'), (iteration_data, 'iteration_data'), (taus, 'taus'), (com_residual, 'com_residual'), (anticom_residual, 'anticom_residual'), (res_anticom_ext_basis, 'res_anticom_ext_basis')]:
-            print('{} memory = {} MB'.format(var_name, get_size(var)/1e9))
-        """
-        
+            
         if verbose:
             print_memory_usage()
         
         ### Compute the relevant quantities in the current basis.
-        [L_H, extended_basis] = lmatrix(basis, H, args['explored_com_data'], operation_mode='commutator')
+        [L_H, extended_basis] = lmatrix(basis, H, args['explored_basis'], args['explored_com_data'], operation_mode='commutator')
         C_H = (L_H.H).dot(L_H)
         C_H = C_H.real
-
-        explored_basis = args['explored_com_data'][0]
-        basis_inds_in_explored_basis = np.array([explored_basis.index(os_b) for os_b in basis], dtype=int)
+        
+        basis_inds_in_explored_basis = np.array([args['explored_basis'].index(os_b) for os_b in basis], dtype=int)
         basis_inds.append(basis_inds_in_explored_basis)
 
         basis_sizes.append(len(basis))
@@ -305,18 +364,22 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
             old_basis = copy.deepcopy(basis)
             
             # Expand by [H, [H, \tau]]
-            expand_com(H, com_residual, extended_basis, basis, dbasis//2, args['explored_com_data'], truncation_size=truncation_size, verbose=verbose)
+            expand_com(H, com_residual, extended_basis, basis, dbasis//2, args['explored_basis'], args['explored_com_data'], truncation_size=truncation_size, verbose=verbose)
             
             # Expand by \{\tau, \tau\}
             if verbose:
                 print('|Basis of \\tau^2|             = {}'.format(len(res_anticom_ext_basis)), flush=True)
+            # CHECK
             expand_anticom(anticom_residual, res_anticom_ext_basis, basis, dbasis//2)
             
             # Project onto the new basis.
             tau = project(basis, qy.Operator(taus[-1], old_basis))
             tau = tau.coeffs.real / nla.norm(tau.coeffs.real)
-        
+
         if verbose:
+            print('|Explored Basis|              = {}'.format(len(args['explored_basis'])), flush=True)
+            
+        if verbose and ind_expansion != num_expansions-1:
             print('\\tau = ', flush=True)
             print_operator(qy.Operator(tau, basis))
         
@@ -326,39 +389,57 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         for ind_tau in range(prev_num_taus, len(taus)):
             ind_expansion_from_ind_tau[ind_tau] = ind_expansion
         prev_num_taus = len(taus)
-
+        
     if verbose:
         print('Computing fidelities.', flush=True)
     start = time.time()
-
+    
     initial_tau_vector = initial_tau.coeffs
-    explored_basis     = args['explored_com_data'][0]
-    initial_tau_inds   = np.array([explored_basis.index(os_tv) for os_tv in initial_tau._basis], dtype=int)
-
+    initial_tau_inds   = np.array([args['explored_basis'].index(os_tv) for os_tv in initial_tau._basis], dtype=int)
+    
     final_tau_vector = taus[-1]
     final_tau_inds   = basis_inds[-1]
-
+    
     fidelities            = []
     initial_fidelities    = []
     final_fidelities      = []
     proj_final_fidelities = []
     for ind_tau in range(len(taus)):
-        ind_expansion      = ind_expansion_from_ind_tau[ind_tau]
-
+        ind_expansion = ind_expansion_from_ind_tau[ind_tau]
+        
         tau_vector = taus[ind_tau]
         tau_inds   = basis_inds[ind_expansion]
-
+        
+        # For debugging, check that the quantities stored using basis_inds
+        # agree with their recorded values during the optimization.
+        if _check_quantities:
+            basis_op = qy.Basis([args['explored_basis'][ind_eb] for ind_eb in tau_inds])
+            tau_op   = qy.Operator(tau_vector, basis_op)
+            
+            com_norm_recorded = com_norms[ind_tau]
+            binarity_recorded = binarities[ind_tau]
+            
+            com_norm_check = qy.commutator(H, tau_op).norm() ** 2.0
+            id_op          = qy.Operator([1.], [identity])
+            binarity_check = (0.5*qy.anticommutator(tau_op, tau_op) - id_op).norm() ** 2.0
+            
+            print('For stored tau_{}, com_norm = {}, com_norm_check = {}'.format(ind_tau, com_norm_recorded, com_norm_check), flush=True)
+            print('For stored tau_{}, binarity = {}, binarity_check = {}'.format(ind_tau, binarity_recorded, binarity_check), flush=True)
+            
+            assert(np.abs(com_norm_recorded - com_norm_check) < 1e-12)
+            assert(np.abs(binarity_recorded - binarity_check) < 1e-9)
+        
         if ind_tau > 0:
             ind_expansion_prev = ind_expansion_from_ind_tau[ind_tau - 1] 
-
+            
             prev_tau_vector = taus[ind_tau - 1]
             prev_tau_inds   = basis_inds[ind_expansion_prev]
             overlap         = compute_overlap_inds(prev_tau_vector, prev_tau_inds,
                                                    tau_vector, tau_inds)
             fidelity = np.abs(overlap)**2.0
-
+            
             fidelities.append(fidelity)
-
+            
             # Project the final \tau into the current tau's basis.
             proj_final_tau_vector = project_vector(final_tau_vector, final_tau_inds, tau_inds)
             # Normalize the projected vector.
@@ -366,7 +447,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
             # And compute its fidelity with the current tau.
             overlap_proj_final  = np.dot(np.conj(tau_vector), proj_final_tau_vector)
             fidelity_proj_final = np.abs(overlap_proj_final)**2.0
-
+            
             proj_final_fidelities.append(fidelity_proj_final)
 
         overlap_initial  = compute_overlap_inds(initial_tau_vector, initial_tau_inds,
@@ -396,6 +477,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
                     'ind_expansion_from_ind_tau' : ind_expansion_from_ind_tau,
                     'com_norms'                  : com_norms,
                     'binarities'                 : binarities,
+                    'objs'                       : objs,
                     'fidelities'                 : fidelities,
                     'initial_fidelities'         : initial_fidelities,
                     'final_fidelities'           : final_fidelities,
@@ -411,7 +493,6 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         for key in args:
             if key not in ['explored_com_data', 'explored_anticom_data']:
                 args_to_record[key] = args[key]
-        args_to_record['explored_basis'] = args['explored_com_data'][0]
         
         data         = [args_to_record, results_data]
         results_file = open(results_filename, 'wb')
@@ -421,9 +502,24 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         args_to_record.clear()
         del args_to_record
 
-    # The final optimized operator O.
-    tau_op = qy.Operator(taus[-1], basis)
+    # The final optimized operator O and its commutator norm and binarity.
+    tau_op   = qy.Operator(taus[-1], basis)
+    com_norm = com_norms[-1]
+    binarity = binarities[-1]
 
+    # For debugging, check that the final answer's quantities agree with
+    # expectations.
+    if _check_quantities:
+        com_norm_check = qy.commutator(H, tau_op).norm() ** 2.0
+        id_op          = qy.Operator([1.], [identity])
+        binarity_check = (0.5*qy.anticommutator(tau_op, tau_op) - id_op).norm() ** 2.0
+        
+        print('final com_norm = {}, com_norm_check = {}'.format(com_norm, com_norm_check), flush=True)
+        print('final binarity = {}, binarity_check = {}'.format(binarity, binarity_check), flush=True)
+
+        assert(np.abs(com_norm - com_norm_check) < 1e-12)
+        assert(np.abs(binarity - binarity_check) < 1e-12)
+        
     if verbose:
         print('Final tau = ', flush=True)
         print_operator(tau_op, num_terms=200)
@@ -431,4 +527,4 @@ def find_binary_iom(hamiltonian, initial_op, args=None):
         print('Final com norm  = {}'.format(com_norm), flush=True)
         print('Final binarity  = {}'.format(binarity), flush=True)
     
-    return [tau_op, com_norms[-1], binarities[-1], results_data]
+    return [tau_op, com_norm, binarity, results_data]

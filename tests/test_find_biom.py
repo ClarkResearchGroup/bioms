@@ -1,14 +1,15 @@
 from .context import bioms
 import qosy as qy
 import numpy as np
+import numpy.linalg as nla
 
 def test_find_biom():
     # Test that the gradient-descent works
     # by finding a non-interacting integral of
     # motion without performing any basis expansions.
-
+    
     np.random.seed(42)
-
+    
     # Number of random Hamiltonians to check.
     num_trials = 10
     
@@ -49,13 +50,14 @@ def test_find_biom():
 
         initial_op = qy.Operator(coeffs, op_strings)
 
-        args = {'dbasis' : 0, 'xtol' : 1e-8, 'num_expansions' : 1, 'verbose' : True}
+        args = {'dbasis' : 0, 'xtol' : 1e-8, 'num_expansions' : 1, 'verbose' : True, 'global_op_type' : 'Majorana'}
 
         [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H_tb, initial_op, args)
-
+        
         op *= 1.0/op.norm()
         op  = qy.convert(op, 'Majorana')
-        
+
+        # Check that the found operator is +/- one of the fermion parity operators.
         found_op = False
         for num_op in num_ops:
             diff1 = (num_op - op).norm()
@@ -68,3 +70,197 @@ def test_find_biom():
         assert(found_op)
         assert(com_norm < 1e-12)
         assert(binarity < 1e-12)
+        
+        # Check the commutator norm and binarity of the result.
+        H = qy.convert(H_tb, 'Majorana')
+        I = qy.Operator([1.], [qy.opstring('I', 'Majorana')])
+        com_norm_check = qy.commutator(H, op).norm()**2.0
+        binarity_check = (0.5*qy.anticommutator(op, op) - I).norm() ** 2.0
+
+        assert(np.abs(com_norm - com_norm_check) < 1e-12)
+        assert(np.abs(binarity - binarity_check) < 1e-12)
+        
+def test_com_norm_binarity1():
+    # Check that the commutator norm and binarity
+    # found by find_binary_iom() are accurate.
+    # Each call to find_binary_iom is independent:
+    # no explored data is reused.
+
+    np.random.seed(42)
+
+    # Number of random Hamiltonians to check.
+    num_trials = 10
+
+    # Identity operator.
+    I = qy.Operator([1.], [qy.opstring('I', 'Pauli')])
+    
+    # Create random 1D Heisenberg Hamiltonians.
+    for ind_trial in range(num_trials):
+        L    = 5
+        J_xy = 1.0
+        J_z  = 1.0
+
+        # Random disorder strength.
+        W = 10.0 * np.random.rand()
+        
+        # The XXZ chain.
+        H  = bioms.xxz_chain(L, J_xy, J_z)
+        # Perturbing magnetic fields.
+        H += bioms.magnetic_fields(W * (2.0*np.random.rand(L)-1.0))
+
+        # Start with a single Z at center.
+        initial_op = qy.Operator([1.], [qy.opstring('Z {}'.format(L//2))])
+
+        print('H = \n{}'.format(H))
+        print('initial_op = \n{}'.format(initial_op))
+
+        # Allow the basis to expand.
+        args = {'dbasis' : 10, 'xtol' : 1e-6, 'num_expansions' : 4, 'verbose' : True, 'global_op_type' : 'Pauli'}
+        
+        [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args, _check_quantities=True)
+        
+        op *= 1.0/op.norm()
+
+        # Check the commutator norm and binarity of the result.
+        com_norm_check = qy.commutator(H, op).norm()**2.0
+        binarity_check = (0.5*qy.anticommutator(op, op) - I).norm() ** 2.0
+
+        assert(np.abs(com_norm - com_norm_check) < 1e-12)
+        assert(np.abs(binarity - binarity_check) < 1e-12)
+
+def test_com_norm_binarity2():
+    # Check that the commutator norm and binarity
+    # found by find_binary_iom() are accurate.
+    # Each call to find_binary_iom is dependent
+    # in the way that the MBL data runs are:
+    # explored data is reused between runs and
+    # the basis expands.
+
+    # Allow the basis to expand.
+    args = {'dbasis' : 10, 'xtol' : 1e-6, 'num_expansions' : 4, 'verbose' : True, 'global_op_type' : 'Pauli'}
+
+    args['explored_basis']        = qy.Basis()
+    args['explored_com_data']     = dict()
+    args['explored_anticom_data'] = dict()
+
+    np.random.seed(42)
+
+    # Number of random Hamiltonians to check.
+    
+    num_trials = 10
+
+    # Identity operator.
+    I = qy.Operator([1.], [qy.opstring('I', 'Pauli')])
+    
+    # Create random 1D Heisenberg Hamiltonians.
+    for ind_trial in range(num_trials):
+        L    = 5
+        J_xy = 1.0
+        J_z  = 1.0
+
+        # Random disorder strength.
+        W = 10.0 * np.random.rand()
+        
+        # The XXZ chain.
+        H  = bioms.xxz_chain(L, J_xy, J_z)
+        # Perturbing magnetic fields.
+        H += bioms.magnetic_fields(W * (2.0*np.random.rand(L)-1.0))
+
+        # Start with a single Z at center.
+        initial_op = qy.Operator([1.], [qy.opstring('Z {}'.format(L//2))])
+
+        print('H = \n{}'.format(H))
+        print('initial_op = \n{}'.format(initial_op))
+        [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args, _check_quantities=True)
+        
+        op *= 1.0/op.norm()
+
+        # Check the commutator norm and binarity of the result.
+        com_norm_check = qy.commutator(H, op).norm()**2.0
+        binarity_check = (0.5*qy.anticommutator(op, op) - I).norm() ** 2.0
+
+        assert(np.abs(com_norm - com_norm_check) < 1e-12)
+        assert(np.abs(binarity - binarity_check) < 1e-12)
+
+def test_binary_op_ED():
+    # Find a perfectly binary operator on three sites.
+    # Check with ED that the resulting operator commutes
+    # with the Hamiltonian and is binary.
+
+    # Allow the basis to expand.
+    args = {'dbasis' : 0, 'xtol' : 1e-12, 'num_expansions' : 1, 'verbose' : True, 'global_op_type' : 'Pauli'}
+
+    args['explored_basis']        = qy.Basis()
+    args['explored_com_data']     = dict()
+    args['explored_anticom_data'] = dict()
+
+    L     = 3
+    basis = qy.cluster_basis(np.arange(1,L+1), np.arange(L), 'Pauli')
+
+    np.random.seed(42)
+
+    # Number of random Hamiltonians to check.
+    num_trials = 2
+
+    # Identity operator.
+    I = qy.Operator([1.], [qy.opstring('I', 'Pauli')])
+    
+    # Create random 1D Heisenberg Hamiltonians.
+    for ind_trial in range(num_trials):
+        J_xy = 1.0
+        J_z  = 1.0
+
+        # Random disorder strength.
+        W = 10.0 * np.random.rand()
+        
+        # The XXZ chain.
+        H  = bioms.xxz_chain(L, J_xy, J_z)
+        # Perturbing magnetic fields.
+        H += bioms.magnetic_fields(W * (2.0*np.random.rand(L)-1.0))
+
+        # Start with a single Z at center.
+        Z_center             = qy.opstring('Z {}'.format(L//2))
+        ind_Z_center         = basis.index(Z_center)
+        coeffs               = np.zeros(len(basis), dtype=complex)
+        coeffs[ind_Z_center] = 1.0
+        initial_op           = qy.Operator(coeffs, basis)
+
+        print('H = \n{}'.format(H))
+        print('initial_op = \n{}'.format(initial_op))
+        [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args, _check_quantities=True)
+        
+        op *= 1.0/op.norm()
+
+        # Check the commutator norm and binarity of the result.
+        com_norm_check = qy.commutator(H, op).norm()**2.0
+        binarity_check = (0.5*qy.anticommutator(op, op) - I).norm() ** 2.0
+
+        assert(np.abs(com_norm - com_norm_check) < 1e-12)
+        assert(np.abs(binarity - binarity_check) < 1e-12)
+
+        assert(np.abs(com_norm) < 1e-10)
+        assert(np.abs(binarity) < 1e-10)
+        
+        # Perform ED on the operator.
+        op_mat         = qy.to_matrix(op, L).toarray()
+        (evals, evecs) = nla.eigh(op_mat)
+        
+        print('Operator eigenvalues: {}'.format(evals))
+        
+        H_mat          = qy.to_matrix(H, L).toarray()
+        
+        binarity_ED    = np.sum(np.abs(np.abs(evals)**2.0 - 1.0)**2.0) / op_mat.shape[0]
+        com_ED         = np.dot(H_mat, op_mat) - np.dot(op_mat, H_mat)
+        com_norm_ED    = np.real(np.trace(np.dot(np.conj(com_ED.T), com_ED))) / com_ED.shape[0]
+        
+        print('com_norm       = {}'.format(com_norm))
+        print('com_norm_check = {}'.format(com_norm_check))
+        print('com_norm_ED    = {}'.format(com_norm_ED))
+        
+        print('binarity       = {}'.format(binarity))
+        print('binarity_check = {}'.format(binarity_check))
+        print('binarity_ED    = {}'.format(binarity_ED))
+        
+        assert(np.abs(com_norm - com_norm_ED) < 1e-12)
+        assert(np.abs(binarity - binarity_ED) < 1e-12)
+        

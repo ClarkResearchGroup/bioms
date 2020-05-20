@@ -9,13 +9,16 @@ def xxz_chain(L, J_xy, J_z, periodic=False):
         if site == L-1 and not periodic:
             continue
         sitep = (site + 1) % L
+
+        s1 = np.minimum(site, sitep)
+        s2 = np.maximum(site, sitep)
         
         for orb in ['X', 'Y', 'Z']:
             if orb in ['X', 'Y']:
                 coeffs.append(0.25 * J_xy)
             else:
                 coeffs.append(0.25 * J_z)
-            op_strings.append(qy.opstring('{} {} {} {}'.format(orb,site,orb,sitep)))
+            op_strings.append(qy.opstring('{} {} {} {}'.format(orb,s1,orb,s2)))
     
     H = qy.Operator(coeffs, op_strings)
     

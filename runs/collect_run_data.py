@@ -24,6 +24,8 @@ import qosy as qy
 import bioms
 from bioms.tools import get_size
 
+tol = 1e-10
+
 # Ignore the OptimizeWarning that happens when scipy.optimize.curve_fit
 # tries to fit a function with a single data point.
 warnings.filterwarnings('ignore', category=so.OptimizeWarning)
@@ -81,6 +83,7 @@ params_to_ignore = ['explored_com_data', \
                     'com_norms', \
                     'binarities', \
                     'tau_norms', \
+                    'objs', \
                     'fidelities', \
                     'initial_fidelities', \
                     'final_fidelities', \
@@ -180,6 +183,8 @@ def operator_localities(operator, num_orbitals, mode=None):
     
     return localities
 
+# TODO: Does this quantity make sense with Pauli strings? Maybe it only
+# makes sense with two-site operators as for OPOs?
 # Compute the "amplitude ranges" of an operator O = \sum_a g_a S_a,
 # the (normalized) probability A_R ~ \sum_{a for range R S_a} |g_a|
 # where R is the maximum distance of the operator string from the center site
@@ -204,6 +209,11 @@ def operator_amplitude_ranges(operator, num_orbitals, lattice_type, L, mode=None
     
     site0 = N//2
     pos0  = coords(site0)
+
+    print('op = \n', flush=True)
+    inds = np.argsort(np.abs(operator.coeffs))[::-1]
+    for ind in inds:
+        print('{} ({})'.format(operator.coeffs[ind], operator._basis[ind]), flush=True)
     
     data       = np.zeros(len(operator))
     row_inds   = np.zeros(len(operator), dtype=int)
@@ -222,9 +232,11 @@ def operator_amplitude_ranges(operator, num_orbitals, lattice_type, L, mode=None
             else:
                 R_site = nla.norm(pos - pos0)
                 
-            if R_site > R_max:
+            if R_site - R_max > tol:
                 R_max    = R_site
                 site_max = site
+
+        print('{} {} -> R_max = {}, site_max = {}'.format(coeff, op_string, R_max, site_max), flush=True)
             
         # Note: The indexing is done by keeping track of the
         # site in the operator string that is farthest
@@ -241,6 +253,8 @@ def operator_amplitude_ranges(operator, num_orbitals, lattice_type, L, mode=None
     
     # Don't normalize to be a probability distribution. You can normalize it later if you want.
     # amp_ranges /= amp_ranges.sum()
+
+    print('amp_ranges = {}'.format(amp_ranges[40:60].toarray().flatten()), flush=True)
     
     return amp_ranges
 
@@ -595,6 +609,11 @@ for folder in folders:
             inds_explored_basis = results_data['basis_inds'][ind_expansion]
             op_strings          = [explored_basis[ind_os] for ind_os in inds_explored_basis]
             operator            = qy.Operator(coeffs, op_strings)
+
+            # |<\tau^z_i, \sigma^z_i>|^2
+            Z_center         = qy.opstring('Z {}'.format(N//2))
+            ind_Z_center     = operator._basis.index(Z_center)
+            coeff_sqr_center = np.abs(operator.coeffs[ind_Z_center])**2.0
             
             # The weights \sum_i |c_i|^2 of the operator on each site i.
             weights = operator_weights(operator, N)
@@ -618,11 +637,11 @@ for folder in folders:
 
             # The sum of the absolute values of the amplitudes of the operator strings
             # in the operator that extend to a range R measured using an L2-norm (Euclidean distance)
-            amp_ranges = operator_amplitude_ranges(operator, N, lattice_type, L)
+            #amp_ranges = operator_amplitude_ranges(operator, N, lattice_type, L)
 
             # The sum of the absolute values of the amplitudes of the operator strings
             # in the operator that extend to a range R measured using an L1-norm (Manhattan distance)
-            amp_ranges_l1 = operator_amplitude_ranges(operator, N, lattice_type, L, mode='L1')
+            #amp_ranges_l1 = operator_amplitude_ranges(operator, N, lattice_type, L, mode='L1')
             
             # The operator inverse participation ratio
             # based on weights.
@@ -642,15 +661,15 @@ for folder in folders:
             
             # The operator inverse participation ratio
             # based on amp_ranges.
-            op_ipr_amp_ranges = inverse_participation_ratio(amp_ranges)
+            #op_ipr_amp_ranges = inverse_participation_ratio(amp_ranges)
             
             # The operator inverse participation ratio
             # based on amp_ranges_l1.
-            op_ipr_amp_ranges_l1 = inverse_participation_ratio(amp_ranges_l1)
+            #op_ipr_amp_ranges_l1 = inverse_participation_ratio(amp_ranges_l1)
             
             # The zero-th order l-bit "energy".
-            random_potentials = args['random_potentials']
-            op_energy         = lbit_energy(random_potentials, operator, N)
+            #random_potentials = args['random_potentials']
+            #op_energy         = lbit_energy(random_potentials, operator, N)
             
             # The distribution of "ranges" of the operator. There are many
             # different types I calculate, so save them to a dictionary.
@@ -680,14 +699,14 @@ for folder in folders:
             corr_length_z_abs_err             = np.sqrt(np.abs(opt_covs_z_abs[0,0]))
             
             # Find an exponential fit of the (normalized) amp_ranges.
-            [opt_params_amp_ranges, opt_covs_amp_ranges] = exp_fit(amp_ranges / amp_ranges.sum(), L, lattice_type)
-            corr_length_amp_ranges                       = opt_params_amp_ranges[0]
-            corr_length_amp_ranges_err                   = np.sqrt(np.abs(opt_covs_amp_ranges[0,0]))
+            #[opt_params_amp_ranges, opt_covs_amp_ranges] = exp_fit(amp_ranges / amp_ranges.sum(), L, lattice_type)
+            #corr_length_amp_ranges                       = opt_params_amp_ranges[0]
+            #corr_length_amp_ranges_err                   = np.sqrt(np.abs(opt_covs_amp_ranges[0,0]))
             
             # Find an exponential fit of the (normalized) amp_ranges_l1.
-            [opt_params_amp_ranges_l1, opt_covs_amp_ranges_l1] = exp_fit(amp_ranges_l1 / amp_ranges_l1.sum(), L, lattice_type)
-            corr_length_amp_ranges_l1                          = opt_params_amp_ranges_l1[0]
-            corr_length_amp_ranges_l1_err                      = np.sqrt(np.abs(opt_covs_amp_ranges_l1[0,0]))
+            #[opt_params_amp_ranges_l1, opt_covs_amp_ranges_l1] = exp_fit(amp_ranges_l1 / amp_ranges_l1.sum(), L, lattice_type)
+            #corr_length_amp_ranges_l1                          = opt_params_amp_ranges_l1[0]
+            #corr_length_amp_ranges_l1_err                      = np.sqrt(np.abs(opt_covs_amp_ranges_l1[0,0]))
             
             # The histogram of the amplitudes of the operator on each operator string.
             (coeff_hist, bin_edges) = np.histogram(-np.log(np.abs(coeffs)+1e-16)/np.log(10.0), bins = np.linspace(0.0, 16.0, 17))
@@ -709,13 +728,15 @@ for folder in folders:
                 'com_norm'              : results_data['com_norms'][ind_tau], \
                 'binarity'              : results_data['binarities'][ind_tau], \
                 'tau_norm'              : results_data['tau_norms'][ind_tau], \
+                'obj'                   : results_data['objs'][ind_tau], \
+                'coeff_sqr_center'      : coeff_sqr_center, \
                 'op_ipr'                : op_ipr, \
                 'op_ipr_z'              : op_ipr_z, \
                 'op_ipr_abs'            : op_ipr_abs, \
                 'op_ipr_z_abs'          : op_ipr_z_abs, \
-                'op_ipr_amp_ranges'     : op_ipr_amp_ranges, \
-                'op_ipr_amp_ranges_l1'  : op_ipr_amp_ranges_l1, \
-                'op_energy'             : op_energy, \
+#                'op_ipr_amp_ranges'     : op_ipr_amp_ranges, \
+#                'op_ipr_amp_ranges_l1'  : op_ipr_amp_ranges_l1, \
+#                'op_energy'             : op_energy, \
                 'fidelity'              : fidelity, \
                 'initial_fidelity'      : results_data['initial_fidelities'][ind_tau], \
                 'final_fidelity'        : results_data['final_fidelities'][ind_tau], \
@@ -727,8 +748,8 @@ for folder in folders:
                 'weights_z_abs'         : weights_z_abs, \
                 'localities'            : localities, \
                 'localities_abs'        : localities_abs, \
-                'amp_ranges'            : amp_ranges, \
-                'amp_ranges_l1'         : amp_ranges_l1, \
+#                'amp_ranges'            : amp_ranges, \
+#                'amp_ranges_l1'         : amp_ranges_l1, \
                 'coeff_hist'            : coeff_hist, \
                 'corr_length'           : corr_length, \
                 'corr_length_err'       : corr_length_err, \
@@ -738,10 +759,10 @@ for folder in folders:
                 'corr_length_abs_err'   : corr_length_abs_err, \
                 'corr_length_z_abs'     : corr_length_z_abs, \
                 'corr_length_z_abs_err' : corr_length_z_abs_err, \
-                'corr_length_amp_ranges'        : corr_length_amp_ranges, \
-                'corr_length_amp_ranges_err'    : corr_length_amp_ranges_err, \
-                'corr_length_amp_ranges_l1'     : corr_length_amp_ranges_l1, \
-                'corr_length_amp_ranges_l1_err' : corr_length_amp_ranges_l1_err, \
+#                'corr_length_amp_ranges'        : corr_length_amp_ranges, \
+#                'corr_length_amp_ranges_err'    : corr_length_amp_ranges_err, \
+#                'corr_length_amp_ranges_l1'     : corr_length_amp_ranges_l1, \
+#                'corr_length_amp_ranges_l1_err' : corr_length_amp_ranges_l1_err, \
                 'ind_tau'               : ind_tau, \
                 'ind_expansion'         : ind_expansion, \
                 'num_taus'              : num_taus, \

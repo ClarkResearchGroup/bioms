@@ -1,4 +1,5 @@
 import sys
+import copy
 
 import numpy as np
 import numpy.linalg as nla
@@ -7,7 +8,7 @@ import scipy.sparse.linalg as ssla
 
 from qosy.operatorstring import opstring
 from qosy.basis          import Basis, Operator
-from qosy.algebra        import structure_constants
+from qosy.algebra        import structure_constants, _operation_opstring
 
 # TODO: document
 def arg(args, arg_name, default_value):
@@ -49,88 +50,42 @@ def compute_overlap_inds(vec1, vec1_basis_inds, vec2, vec2_basis_inds):
         # Both vectors should be real.
         return np.dot(np.conj(vec1[inds_shared_v1]), vec2[inds_shared_v2])
 
-def _explore(basis, H, explored_basis, explored_extended_basis, explored_s_constants_data, operation_mode='commutator', allowed_labels=None):
+def _explore(basis, op, explored_basis, explored_s_constants, operation_mode='commutator'):
     # Explore the space of OperatorStrings, starting from
-    # the given Basis. Update the explored_basis, explored_extended_basis,
+    # the given Basis. Update the explored_basis
     # and explored_s_constants variables as you go.
-
-    # First, find the part of basis that is unexplored.
-    unexplored_basis = Basis([os for os in basis if os not in explored_basis])
     
-    # Then explore that part.
-    [unexplored_s_constants_data, unexplored_extended_basis] = structure_constants(unexplored_basis, H._basis, return_extended_basis=True, return_data_tuple=True, operation_mode=operation_mode, tol=0.0)
+    basisA = basis
+    basisB = op._basis
     
-    # Update the explored Bases.
-    explored_basis          += unexplored_basis
-    explored_extended_basis += unexplored_extended_basis
+    explored_basis += basisA
 
-    # Update the explored structure constants data.
-    for (coeff, os) in H:
-        # The new information found from exploring.
-        row_inds_unexplored = [explored_extended_basis.index(unexplored_extended_basis.op_strings[ind_eb_os]) for ind_eb_os in unexplored_s_constants_data[os][0]]
-        col_inds_unexplored = [explored_basis.index(unexplored_basis.op_strings[ind_b_os]) for ind_b_os in unexplored_s_constants_data[os][1]]
-        data_unexplored     = unexplored_s_constants_data[os][2]
+    extended_basis = Basis() # basisC
 
-        # The old information from previous exploration.
-        if os in explored_s_constants_data:
-            old_row_inds = explored_s_constants_data[os][0]
-            old_col_inds = explored_s_constants_data[os][1]
-            old_data     = explored_s_constants_data[os][2]
-        else:
-            old_row_inds = []
-            old_col_inds = []
-            old_data     = []
-            
-        # The update
-        explored_s_constants_data[os] = [old_row_inds + row_inds_unexplored, old_col_inds + col_inds_unexplored, old_data + data_unexplored]
-    
-    # From the collected information, find the
-    # extended_basis corresponding to basis.
-    inds_basis_to_x = [explored_basis.index(os) for os in basis]
-    inds_x_to_basis = dict()
-    for ind_b in range(len(basis)):
-        inds_x_to_basis[inds_basis_to_x[ind_b]] = ind_b 
-    
-    extended_basis = Basis()
-    inds_extended_basis_to_x = []
-    for (coeff, os) in H:
-        # If only considering a part of the Hamiltonian,
-        # with OperatorStrings with the given allowed_labels, then
-        # only construct the extended basis for that part.
-        if allowed_labels is not None and len(set(os.orbital_labels).intersection(allowed_labels)) == 0:
-            continue # TODO: check if I am doing this right
-        
-        [inds_x_eb, inds_x_b, _] = explored_s_constants_data[os]
-        for (ind_x_eb, ind_x_b) in zip(inds_x_eb, inds_x_b):
-            if ind_x_b in inds_x_to_basis and explored_extended_basis[ind_x_eb] not in extended_basis:
-                extended_basis += explored_extended_basis[ind_x_eb]
-                inds_extended_basis_to_x.append(ind_x_eb)
-    inds_x_to_extended_basis = dict()
-    for ind_eb in range(len(extended_basis)):
-        inds_x_to_extended_basis[inds_extended_basis_to_x[ind_eb]] = ind_eb 
-
-    # From the information collected from the
-    # explored bases, construct the commutant matrix.
     row_inds = []
     col_inds = []
     data     = []
-    for (coeff, os) in H:
-        # If only considering a part of the Hamiltonian,
-        # with OperatorStrings with the given allowed_labels, then
-        # only construct the extended basis for that part.
-        if allowed_labels is None or len(set(os.orbital_labels).intersection(allowed_labels)) != 0:
-            [inds_explored_eb, inds_explored_b, explored_data] = explored_s_constants_data[os]
-            
-            for (ind_explored_eb, ind_explored_b, explored_datum) in zip(inds_explored_eb, inds_explored_b, explored_data):
-                if ind_explored_b in inds_x_to_basis and ind_explored_eb in inds_x_to_extended_basis:
-                    row_ind = inds_x_to_extended_basis[ind_explored_eb]
-                    col_ind = inds_x_to_basis[ind_explored_b]
-                    
-                    row_inds.append(row_ind)
-                    col_inds.append(col_ind)
-                    data.append(coeff * explored_datum)
+    for (coeff_B, os_B) in op:
+        for os_A in basisA:
+            key_BA = (os_B, os_A)
+            try:
+                (coeff_C, os_C) = explored_s_constants[key_BA]
+            except KeyError:
+                (coeff_C, os_C) = _operation_opstring(os_B, os_A, operation_mode=operation_mode)
+                explored_s_constants[key_BA] = (coeff_C, os_C)
                 
-    l_matrix = ss.csr_matrix((data, (row_inds, col_inds)), shape=(len(extended_basis), len(basis)), dtype=np.complex128)
+            if os_C is not None:
+                extended_basis += os_C
+                
+                row_ind = extended_basis.index(os_C)
+                col_ind = basisA.index(os_A)
+                datum   = coeff_B * coeff_C
+                
+                row_inds.append(row_ind)
+                col_inds.append(col_ind)
+                data.append(datum)
+      
+    l_matrix = ss.csr_matrix((data, (row_inds, col_inds)), shape=(len(extended_basis), len(basis)), dtype=np.complex)
 
     return [l_matrix, extended_basis]
 
@@ -178,6 +133,11 @@ def project_vector(vec1, basis_inds1, basis_inds2):
 # TODO: document
 def project(basis, op):
     """Project the operator into the given basis.
+
+    Note
+    ----
+    Creates a copy of the basis so that the projected
+    operator is an independent object.
     """
     
     coeffs     = []
@@ -187,41 +147,27 @@ def project(basis, op):
             coeffs.append(coeff)
             inds_basis.append(basis.index(os))
 
-    vec = np.zeros(len(basis), dtype=complex)
+    inds_basis = np.array(inds_basis, dtype=int)
+    coeffs     = np.array(coeffs, dtype=complex)
+            
+    vec             = np.zeros(len(basis), dtype=complex)
     vec[inds_basis] = coeffs
 
-    projected_op = Operator(vec, basis.op_strings, op_type = op.op_type)
+    projected_op = Operator(vec, copy.deepcopy(basis), op_type = op.op_type)
     return projected_op
 
 # TODO: document
-def lmatrix(basis, H, explored_data, operation_mode='commutator'):
+def lmatrix(basis, H, explored_basis, explored_s_constants, operation_mode='commutator'):
     """Build the Liouvillian matrix L_H (or anti-Liouvillian matrix
     \\bar{L}_H) from the explored data.
     
     ...
     """
 
-    [explored_basis, explored_extended_basis, explored_s_constants_data] = explored_data
-    
-    [l_matrix, extended_basis] = _explore(basis, H, explored_basis, explored_extended_basis, explored_s_constants_data, operation_mode=operation_mode)
-    
-    # For book-keeping indices in different bases.
-    inds_basis_to_x = np.array([explored_basis.index(b_os) for b_os in basis], dtype=int)
-    inds_x_to_basis = dict()
-    for ind_b in range(len(basis)):
-        inds_x_to_basis[inds_basis_to_x[ind_b]] = ind_b
-
-    inds_extended_basis_to_x = np.array([explored_extended_basis.index(eb_os) for eb_os in extended_basis], dtype=int)
-    inds_x_to_extended_basis = dict()
-    for ind_eb in range(len(extended_basis)):
-        inds_x_to_extended_basis[inds_extended_basis_to_x[ind_eb]] = ind_eb 
-
-    results = [l_matrix, extended_basis]
-            
-    return results
+    return _explore(basis, H, explored_basis, explored_s_constants, operation_mode=operation_mode)
 
 # TODO: document
-def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_com_data, truncation_size=None, verbose=False):
+def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_basis, explored_com_data, truncation_size=None, verbose=False):
     """Expand the basis by commuting with the Hamiltonian H.
     Compute [H, [H, \tau]] and add the OperatorStrings with the
     largest coefficients to the basis.
@@ -244,7 +190,7 @@ def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_com_
         t_com_residual       = com_residual
         t_com_extended_basis = com_extended_basis
     
-    [L_H_ext, ext_ext_basis] = lmatrix(t_com_extended_basis, H, explored_com_data, operation_mode='commutator')
+    [L_H_ext, ext_ext_basis] = lmatrix(t_com_extended_basis, H, explored_basis, explored_com_data, operation_mode='commutator')
 
     if verbose:
         print('|Basis of [H, [H, \\tau]]|     = {}'.format(len(ext_ext_basis)), flush=True)
@@ -305,5 +251,32 @@ def get_size(obj, seen=None):
         size += sum([get_size(i, seen) for i in obj])
     return size
 
+# Compute a finite-difference approximation
+# to a gradient, given the function.
+def finite_diff_gradient(f, x, eps=1e-6):
+    n = len(x)
+    
+    grad_f = np.zeros(n)
+    for i in range(n):
+        dx        = np.zeros(n)
+        dx[i]     = eps
+        grad_f[i] = (f(x + dx) - f(x - dx))/(2.0*eps)
+
+    return grad_f
+
+# Compute a finite-difference approximation
+# to a hessian of a function, given the gradient.
+def finite_diff_hessian(grad_f, x, eps=1e-6):
+    n = len(x)
+    
+    hess_f  = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            dy          = np.zeros(n)
+            dy[j]       = eps
+            
+            hess_f[i,j] = (grad_f(x + dy)[i] - grad_f(x - dy)[i])/(2.0*eps)
+
+    return hess_f
 
 

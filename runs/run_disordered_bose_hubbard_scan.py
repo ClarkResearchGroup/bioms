@@ -102,8 +102,9 @@ args['proc'] = proc
 # Args are used for two things:
 # 1. To specify the input parameters to find_binary_iom()
 # 2. To save run information to file for later reference.
-args['explored_com_data']     = [qy.Basis(), qy.Basis(), dict()]
-args['explored_anticom_data'] = [qy.Basis(), qy.Basis(), dict()]
+args['explored_basis']        = qy.Basis()
+args['explored_com_data']     = dict()
+args['explored_anticom_data'] = dict()
 
 # Loop through disordered realizations and the disorder
 # strengths. Find approximate l-bits and save the results
