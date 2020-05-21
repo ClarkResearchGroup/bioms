@@ -30,9 +30,6 @@ def test_gradient_and_hessian1():
             
             [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args, _check_derivatives=True)
 
-"""
-# Quite slow and probably unnecessary. Other tests test that the expansions work.
-
 # Test that the gradient and hessian formulae
 # used in the minimization match the finite-difference
 # results for random Hamiltonians and operators.
@@ -57,4 +54,3 @@ def test_gradient_and_hessian2():
             initial_op = qy.Operator(tau, basis)
             
             [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args, _check_derivatives=True)
-"""
