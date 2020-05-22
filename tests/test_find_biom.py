@@ -86,7 +86,7 @@ def test_com_norm_binarity1():
     # Each call to find_binary_iom is independent:
     # no explored data is reused.
 
-    np.random.seed(42)
+    np.random.seed(43)
 
     # Number of random Hamiltonians to check.
     num_trials = 10
@@ -139,12 +139,13 @@ def test_com_norm_binarity2():
     # Allow the basis to expand.
     args = {'dbasis' : 10, 'xtol' : 1e-6, 'num_expansions' : 4, 'verbose' : True, 'global_op_type' : 'Pauli'}
 
-    args['explored_basis']        = qy.Basis()
-    args['explored_com_data']     = dict()
-    args['explored_anticom_data'] = dict()
+    args['explored_basis']          = qy.Basis()
+    args['explored_extended_basis'] = qy.Basis()
+    args['explored_com_data']       = dict()
+    args['explored_anticom_data']   = dict()
 
-    np.random.seed(42)
-
+    np.random.seed(44)
+    
     # Number of random Hamiltonians to check.
     
     num_trials = 10
@@ -182,22 +183,80 @@ def test_com_norm_binarity2():
         assert(np.abs(com_norm - com_norm_check) < 1e-12)
         assert(np.abs(binarity - binarity_check) < 1e-12)
 
+def test_truncation_op_type():
+    # Check that the commutator norm and binarity
+    # found by find_binary_iom() are accurate.
+    # In this test, we check that setting a non-zero
+    # truncation size for the [H, [H, tau]] truncation
+    # and trying different op_types work correctly.
+    
+    np.random.seed(1)
+    
+    for global_op_type in ['Pauli', 'Majorana']:
+        args = {'dbasis' : 10, 'xtol' : 1e-6, 'num_expansions' : 4, 'verbose' : True, 'global_op_type' : global_op_type, 'truncation_size' : 5}
+
+        args['explored_basis']          = qy.Basis()
+        args['explored_extended_basis'] = qy.Basis()
+        args['explored_com_data']       = dict()
+        args['explored_anticom_data']   = dict()
+
+        # Number of random Hamiltonians to check.
+        num_trials = 5
+
+        # Identity operator.
+        I = qy.Operator([1.], [qy.opstring('I', 'Pauli')])
+        I = qy.convert(I, global_op_type)
+
+        # Create random 1D Heisenberg Hamiltonians.
+        for ind_trial in range(num_trials):
+            L    = 5
+            J_xy = 1.0
+            J_z  = 1.0
+
+            # Random disorder strength.
+            W = 10.0 * np.random.rand()
+
+            # The XXZ chain.
+            H  = bioms.xxz_chain(L, J_xy, J_z)
+            # Perturbing magnetic fields.
+            H += bioms.magnetic_fields(W * (2.0*np.random.rand(L)-1.0))
+
+            H = qy.convert(H, global_op_type)
+            
+            # Start with a single Z at center.
+            initial_op = qy.Operator([1.], [qy.opstring('Z {}'.format(L//2))])
+            initial_op = qy.convert(initial_op, global_op_type)
+
+            print('H = \n{}'.format(H))
+            print('initial_op = \n{}'.format(initial_op))
+            [op, com_norm, binarity, results_data] = bioms.find_binary_iom(H, initial_op, args, _check_quantities=True)
+
+            op *= 1.0/op.norm()
+
+            # Check the commutator norm and binarity of the result.
+            com_norm_check = qy.commutator(H, op).norm()**2.0
+            binarity_check = (0.5*qy.anticommutator(op, op) - I).norm() ** 2.0
+
+            assert(np.abs(com_norm - com_norm_check) < 1e-12)
+            assert(np.abs(binarity - binarity_check) < 1e-12)
+
 def test_binary_op_ED1():
     # Find a perfectly binary operator on three sites.
     # Check with ED that the resulting operator commutes
     # with the Hamiltonian and is binary.
-
+    
     # Allow the basis to expand.
     args = {'dbasis' : 0, 'xtol' : 1e-12, 'num_expansions' : 1, 'verbose' : True, 'global_op_type' : 'Pauli'}
-
-    args['explored_basis']        = qy.Basis()
-    args['explored_com_data']     = dict()
-    args['explored_anticom_data'] = dict()
-
+    
+    args['explored_basis']          = qy.Basis()
+    args['explored_extended_basis'] = qy.Basis()
+    args['explored_com_data']       = dict()
+    args['explored_anticom_data']   = dict()
+    
     L     = 3
     basis = qy.cluster_basis(np.arange(1,L+1), np.arange(L), 'Pauli')
 
-    np.random.seed(42)
+    np.random.seed(45)
 
     # Number of random Hamiltonians to check.
     num_trials = 2
@@ -271,18 +330,21 @@ def test_binary_op_ED2():
     # obtained after a few basis expansions.
     # Check with ED that the commutator norm and binarity
     # agrees with the ED estimates.
-
+    
     # Allow the basis to expand.
     args = {'dbasis' : 10, 'xtol' : 1e-12, 'num_expansions' : 2, 'verbose' : True, 'global_op_type' : 'Pauli'}
+    
+    args['explored_basis']          = qy.Basis()
+    args['explored_extended_basis'] = qy.Basis()
+    args['explored_com_data']       = dict()
+    args['explored_anticom_data']   = dict()
 
-    args['explored_basis']        = qy.Basis()
-    args['explored_com_data']     = dict()
-    args['explored_anticom_data'] = dict()
+    # Also check that the "local Hamiltonian" function in find_binary_iom()
+    # is working correctly with expansions and finding an IOM efficiently. 
+    L     = 11
+    basis = qy.cluster_basis(np.arange(1,3+1), np.arange(L//2-1,L//2+2), 'Pauli')
 
-    L     = 5
-    basis = qy.cluster_basis(np.arange(1,L+1), np.arange(1,L-1), 'Pauli')
-
-    np.random.seed(42)
+    np.random.seed(46)
 
     # Number of random Hamiltonians to check.
     num_trials = 2
@@ -347,4 +409,4 @@ def test_binary_op_ED2():
         assert(np.abs(com_norm - com_norm_ED) < 1e-12)
         assert(np.abs(binarity - binarity_ED) < 1e-12)
 
-        
+    

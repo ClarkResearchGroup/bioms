@@ -65,7 +65,7 @@ def _basis_index_convertors(basis, explored_basis):
 
     return [inds_basis_to_exp, inds_exp_to_basis]
 
-def _update_explored_s_constants(inds_exp_basisA, inds_exp_basisB, explored_basis, explored_s_constants, operation_mode):
+def _update_explored_s_constants(inds_exp_basisA, inds_exp_basisB, explored_basis, explored_extended_basis, explored_s_constants, operation_mode):
     # Helper function for updating the data saved in explored_s_constants.
     
     # 1. Find keys that are not in explored_s_constants.
@@ -73,41 +73,51 @@ def _update_explored_s_constants(inds_exp_basisA, inds_exp_basisB, explored_basi
                        for ind_exp_B in inds_exp_basisB
                        for ind_exp_A in inds_exp_basisA
                        if (ind_exp_B, ind_exp_A) not in explored_s_constants]
+    
+    # 2. Update explored_s_constants with the new data.
+    # (slow: this is the bottleneck of build_s_constants(), computing
+    # and saving all of the structure constants. But after these are
+    # stored, future runs will save time.)
+    for (ind_exp_B, ind_exp_A) in unexplored_keys:
+        keyBA           = (ind_exp_B, ind_exp_A)
+        (coeff_C, os_C) = _operation_opstring(explored_basis[ind_exp_B], explored_basis[ind_exp_A], operation_mode=operation_mode)
 
-    # 2. Compute the new data to insert into explored_s_constants.
-    new_s_constants_data = [_operation_opstring(explored_basis[ind_exp_B], explored_basis[ind_exp_A], operation_mode=operation_mode)
-                            for (ind_exp_B, ind_exp_A) in unexplored_keys]
-
-    # Maybe don't need this?
-    # 3. Identify the new OperatorStrings that should be added to the explored_extended_basis.
-    #unexplored_ext_basis = Basis(list(set([os for (_, os) in new_s_constants_data
-    #                                       if (os is not None and os not in explored_extended_basis)])))
-    #
-    # 4. Add them to the explored_extended_basis.
-    #explored_extended_basis += unexplored_ext_basis
-    #
-    #
-    # 5. Modify the new_s_constants_data so that OperatorStrings
-    #    are instead replaced by their indices in the explored_extended_basis.
-    #new_s_constants_data = [(key, coeff_C, explored_extended_basis.index(os_C)) if (os_C is not None)
-    #                        else (key, coeff_C, None)
-    #                        for (key, (coeff_C, os_C)) in zip(unexplored_keys, new_s_constants_data)]
-
-    # 3. Update explored_s_constants with the new data.
-    for (keyBA, result_C) in zip(unexplored_keys, new_s_constants_data):
+        if os_C is not None:
+            explored_extended_basis += os_C
+            ind_exp_C                = explored_extended_basis.index(os_C)
+            result_C                 = (coeff_C, ind_exp_C)
+        else:
+            result_C = None
+            
         explored_s_constants[keyBA] = result_C
 
-def _build_s_constants_data(basisA, basisB, inds_basisA_to_exp, inds_basisB_to_exp, explored_s_constants):
+def _build_s_constants_data(basisA, basisB, inds_basisA_to_exp, inds_basisB_to_exp, explored_extended_basis, explored_s_constants):
     # Builds the structure constants given fully updated
-    # explored_s_constants data. Stores the results as
-    # lists of row_inds, col_inds, and data for later
-    # use in creating a scipy.csr_matrix.
-    
-    # Compute the indices of osC in the explored_extended_basis
-    # This will then be converted to the extended_basis once
-    # that is fully built.
-    extended_basis = Basis()
+    # explored bases and explored_s_constants data.
+    # Stores the results as lists of row_inds, col_inds,
+    # and data for later use in creating a scipy.csr_matrix l_matrix.
 
+    # The identity OperatorString (needed to identify its index in the extended basis).
+    if len(basisA) > 0:
+        identity = opstring('I', basisA[0].op_type)
+    else:
+        identity = opstring('I', 'Pauli')
+
+    # The list of ints mappings indices in basisC (extended_basis) to explored_extended_basis
+    # so that inds_basisC_to_exp[ind_C] = ind_exp_C.
+    inds_basisC_to_exp = []
+    
+    # The dictionary mapping indices in explored_extended_basis to basisC (extended_basis)
+    # so that inds_exp_to_basisC[ind_exp_C] = ind_C
+    # (This is just used in this function to avoid having to call extended_basis.index(os_C)
+    # many times for the same OperatorString os_C. This is good to realize: many of the os_C
+    # are actually the same.)
+    inds_exp_to_basisC = dict()
+
+    # A running index used to keep track of the
+    # last index updated in inds_basisC_to_exp.
+    ind_C = 0
+    
     basisB_inds    = []
     row_inds       = []
     col_inds       = []
@@ -118,15 +128,22 @@ def _build_s_constants_data(basisA, basisB, inds_basisA_to_exp, inds_basisB_to_e
             ind_exp_A = inds_basisA_to_exp[ind_A]
             key_BA    = (ind_exp_B, ind_exp_A)
             
-            (coeff_C, os_C) = explored_s_constants[key_BA]
+            result_C = explored_s_constants[key_BA]
+            
+            if result_C is not None:
+                (coeff_C, ind_exp_C) = result_C
                 
-            if os_C is not None:
-                extended_basis += os_C
+                if ind_exp_C in inds_exp_to_basisC:
+                    row_ind = inds_exp_to_basisC[ind_exp_C] # an already stored ind_C
+                else:
+                    row_ind                       = ind_C
+                    inds_exp_to_basisC[ind_exp_C] = row_ind
+                    inds_basisC_to_exp.append(ind_exp_C)
+                    ind_C += 1
                 
-                row_ind = extended_basis.index(os_C)
                 col_ind = ind_A
-                datum   = coeff_C # * coeff_B
-
+                datum   = coeff_C # * coeff_B # Note: coeff_B is what you would multiply here if computing the Liouvillian matrix. But that is done later in build_l_matrix().
+                
                 # Keep track of which basisB (operator)
                 # index this term comes from.
                 # This is used later for constructing
@@ -142,18 +159,32 @@ def _build_s_constants_data(basisA, basisB, inds_basisA_to_exp, inds_basisB_to_e
     col_inds    = np.array(col_inds, dtype=int)
     data        = np.array(data, dtype=complex)
     
-    # Maybe don't need this?
-    # Convert the indices in row_inds_exp to the extended_basis 
-    #extended_basis = Basis(list(set([explored_extended_basis[ind_exp_C] for ind_exp_C in row_inds_exp])))
-    #row_inds       = [extended_basis.index(explored_extended_basis[ind_exp_C]) for ind_exp_C in row_inds_exp]
-    
-    #l_matrix = ss.csr_matrix((data, (row_inds, col_inds)), shape=(len(extended_basis), len(basisA)), dtype=np.complex)
-    
     s_constants_data = [basisB_inds, row_inds, col_inds, data]
-    
-    return [s_constants_data, extended_basis]
+
+    # The indices of the extended basis (basisC) used to specify
+    # the extended_basis corresponding to these s_constants.
+    inds_basisC_to_exp = np.array(inds_basisC_to_exp, dtype=int)
+
+    # The index of the identity OperatorString in basisC.
+    try:
+        # Note: Because explored_extended_basis is shared between commutator and anticommutator
+        # data, the identity could be in explored_extended_basis, but not
+        # in inds_exp_to_basisC.
+        indC_identity = inds_exp_to_basisC[explored_extended_basis.index(identity)]
+    except KeyError:
+        indC_identity = None
+    # NOTE: In principle, we could have returned inds_exp_to_basisC
+    # which would have contained indC_identity, but I wanted to avoid
+    # storing unnecessary data. There was no place in the code that
+    # ever needed inds_basisC_to_exp, but there were places that needed indC_identity.
         
-def build_s_constants(basisA, basisB, explored_basis, explored_s_constants, operation_mode='commutator'):
+    return [s_constants_data, inds_basisC_to_exp, indC_identity]
+        
+def build_s_constants(basisA, basisB, explored_basis, explored_extended_basis, explored_s_constants, operation_mode='commutator'):
+    """Build the structure constants f_{ba}^c for the given bases
+    using the data stored in explored_basis and explored_s_constants.
+    """
+    
     # Explore the space of OperatorStrings, starting from
     # the given Basis. Update the explored_basis
     # and explored_s_constants variables as you go.
@@ -163,11 +194,11 @@ def build_s_constants(basisA, basisB, explored_basis, explored_s_constants, oper
     # explored_s_constants is a dictionary mapping (b,a) to (f_{ba}^c, c)
     # where a,b,c are indices of OperatorStrings S_a, S_b, S_c in the
     # relevant explored bases.
-
+    
     # 1. First, identify completely unexplored OperatorStrings.
     unexplored_basisA = Basis([os for os in basisA if os not in explored_basis])
     unexplored_basisB = Basis([os for os in basisB if os not in explored_basis and os not in basisA])
-
+    
     # 2. Update the explored_basis so that these OperatorStrings can be indexed.
     explored_basis += unexplored_basisA
     explored_basis += unexplored_basisB
@@ -175,17 +206,17 @@ def build_s_constants(basisA, basisB, explored_basis, explored_s_constants, oper
     # 3. Prepare index convertors for future use.
     [inds_basisA_to_exp, inds_exp_to_basisA] = _basis_index_convertors(basisA, explored_basis)
     [inds_basisB_to_exp, inds_exp_to_basisB] = _basis_index_convertors(basisB, explored_basis)
-
+    
     # 4. Update the explored_s_constants data.
-    _update_explored_s_constants(inds_basisA_to_exp, inds_basisB_to_exp, explored_basis, explored_s_constants, operation_mode)
-
+    _update_explored_s_constants(inds_basisA_to_exp, inds_basisB_to_exp, explored_basis, explored_extended_basis, explored_s_constants, operation_mode)
+    
     # 5. Build the structure constants data with the updated data.
-    [s_constants_data, extended_basis] = _build_s_constants_data(basisA, basisB, inds_basisA_to_exp, inds_basisB_to_exp, explored_s_constants)
-
-    return [s_constants_data, extended_basis]
+    [s_constants_data, inds_extended_basis, ind_identity_extended_basis] = _build_s_constants_data(basisA, basisB, inds_basisA_to_exp, inds_basisB_to_exp, explored_extended_basis, explored_s_constants)
+    
+    return [s_constants_data, inds_extended_basis, ind_identity_extended_basis]
 
 # TODO: document
-def build_l_matrix(s_constants_data, op, basis, extended_basis):
+def build_l_matrix(s_constants_data, op, basis, inds_extended_basis):
     """Build the Liouvillian matrix (L_H)_{ca} = \sum_b J_b f_{ba}^c (or anti-Liouvillian matrix
     \\bar{L}_H) from the structure constants f_{ba}^c and the vector J_b.
     
@@ -203,48 +234,9 @@ def build_l_matrix(s_constants_data, op, basis, extended_basis):
     # Update the data to include the contribution from the vector J_b.
     new_data = data * vec[basisB_inds]
     
-    l_matrix = ss.csr_matrix((new_data, (row_inds, col_inds)), shape=(len(extended_basis), len(basis)), dtype=np.complex)
+    l_matrix = ss.csr_matrix((new_data, (row_inds, col_inds)), shape=(len(inds_extended_basis), len(basis)), dtype=np.complex)
     
     return l_matrix
-    
-def _explore_correct(basis, op, explored_basis, explored_s_constants, operation_mode='commutator'):
-    # Explore the space of OperatorStrings, starting from
-    # the given Basis. Update the explored_basis
-    # and explored_s_constants variables as you go.
-    
-    basisA = basis
-    basisB = op._basis
-    
-    explored_basis += basisA
-
-    extended_basis = Basis() # basisC
-
-    row_inds = []
-    col_inds = []
-    data     = []
-    for (coeff_B, os_B) in op:
-        for os_A in basisA:
-            key_BA = (os_B, os_A)
-            try:
-                (coeff_C, os_C) = explored_s_constants[key_BA]
-            except KeyError:
-                (coeff_C, os_C) = _operation_opstring(os_B, os_A, operation_mode=operation_mode)
-                explored_s_constants[key_BA] = (coeff_C, os_C)
-                
-            if os_C is not None:
-                extended_basis += os_C
-                
-                row_ind = extended_basis.index(os_C)
-                col_ind = basisA.index(os_A)
-                datum   = coeff_B * coeff_C
-                
-                row_inds.append(row_ind)
-                col_inds.append(col_ind)
-                data.append(datum)
-      
-    l_matrix = ss.csr_matrix((data, (row_inds, col_inds)), shape=(len(extended_basis), len(basis)), dtype=np.complex)
-
-    return [l_matrix, extended_basis]
 
 # TODO: document
 def print_operator(op, num_terms=20):
@@ -313,8 +305,35 @@ def project(basis, op):
     projected_op = Operator(vec, copy.deepcopy(basis), op_type = op.op_type)
     return projected_op
 
+def find_local_H(basis, H):
+    """Find the "local" part of Hamiltonian H
+    that has non-trivially commutators with the OperatorStrings
+    in the given basis (because they have overlapping sites).
+    Returns the local Hamiltonian Operator.
+
+    NOTE: This function only works for Pauli strings!
+    (It assumes that OperatorStrings with no overlapping
+    sites do not commute, which is true only for Pauli strings,
+    but not Majorana strings or Fermion strings.)
+    """
+
+    if H.op_type != 'Pauli':
+        raise ValueError('This function does not work for OperatorStrings of type: {}'.format(H.op_type))
+
+    # All of the sites that the OperatorStrings in basis have support on.
+    sites_in_basis = set([orb_label for os in basis for orb_label in os.orbital_labels])
+
+    # Note: an empty set evaluates to False. So if the intersection set in the list comprehension
+    # is not empty, then you add that OperatorString to the basis.
+    inds_local = np.array([ind_os for ind_os in range(len(H._basis)) if sites_in_basis.intersection(H._basis[ind_os].orbital_labels)], dtype=int)
+
+    # The local part of the Hamiltonian H that has overlap with the sites in basis.
+    H_local = Operator(H.coeffs[inds_local], Basis([H._basis[ind_os] for ind_os in inds_local]))
+    
+    return H_local
+
 # TODO: document
-def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_basis, explored_com_data, truncation_size=None, verbose=False):
+def expand_com(H, com_residual, inds_com_extended_basis, basis, dbasis, explored_basis, explored_extended_basis, explored_com_data, truncation_size=None, verbose=False):
     """Expand the basis by commuting with the Hamiltonian H.
     Compute [H, [H, \tau]] and add the OperatorStrings with the
     largest coefficients to the basis.
@@ -332,16 +351,23 @@ def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_basi
         inds_sort = np.argsort(np.abs(com_residual))[::-1]
         inds_sort = inds_sort[0:vec_size]
         t_com_residual       = com_residual[inds_sort]
-        t_com_extended_basis = Basis([com_extended_basis[ind] for ind in inds_sort])
+        t_com_extended_basis = Basis([explored_extended_basis[inds_com_extended_basis[ind]] for ind in inds_sort])
     else:
         t_com_residual       = com_residual
-        t_com_extended_basis = com_extended_basis
+        t_com_extended_basis = Basis([explored_extended_basis[ind_exp] for ind_exp in inds_com_extended_basis])
 
-    [s_constants_ext, ext_ext_basis] = build_s_constants(t_com_extended_basis, H._basis, explored_basis, explored_com_data, operation_mode='commutator')
-    L_H_ext                          = build_l_matrix(s_constants_ext, H, t_com_extended_basis, ext_ext_basis)
+    if H.op_type == 'Pauli':
+        # Consider only the terms in H that have spatial overlap
+        # with the current basis, so that you do not waste
+        # time and memory considering commutators between far away Pauli strings.
+        H_local = find_local_H(t_com_extended_basis, H)
+    else:
+        H_local = H
+    [s_constants_ext, inds_ext_ext_basis, _] = build_s_constants(t_com_extended_basis, H_local._basis, explored_basis, explored_extended_basis, explored_com_data, operation_mode='commutator')
+    L_H_ext                                  = build_l_matrix(s_constants_ext, H_local, t_com_extended_basis, inds_ext_ext_basis)
 
     if verbose:
-        print('|Basis of [H, [H, \\tau]]|     = {}'.format(len(ext_ext_basis)), flush=True)
+        print('|Basis of [H, [H, \\tau]]|     = {}'.format(len(inds_ext_ext_basis)), flush=True)
     
     com_H_residual = L_H_ext.dot(t_com_residual)
     
@@ -349,27 +375,29 @@ def expand_com(H, com_residual, com_extended_basis, basis, dbasis, explored_basi
     ind_add   = 0
     num_added = 0
     while num_added < dbasis and ind_add < len(inds_sort):
-        os = ext_ext_basis[inds_sort[ind_add]]
+        os = explored_extended_basis[inds_ext_ext_basis[inds_sort[ind_add]]]
         if os not in basis:
             basis     += os
             num_added += 1
         ind_add += 1
 
 # TODO: document
-def expand_anticom(anticom_residual, anticom_extended_basis, basis, dbasis):
+def expand_anticom(anticom_residual, inds_anticom_extended_basis, basis, dbasis, explored_extended_basis):
     """Expand the basis by anticommuting with the operator O.
     Compute {O, O}/2 = O^2 and add the OperatorStrings with the
     largest coefficients to the basis.
     """
     
-    identity_os = opstring('I', op_type=basis[0].op_type)
+    identity_os  = opstring('I', op_type=basis[0].op_type)
+    ind_identity = explored_extended_basis.index(identity_os)
     
     inds_sort = np.argsort(np.abs(anticom_residual))[::-1]
     ind_add   = 0
     num_added = 0
     while num_added < dbasis and ind_add < len(inds_sort):
-        os = anticom_extended_basis[inds_sort[ind_add]]
-        if os not in basis and os != identity_os:
+        ind_exp_os = inds_anticom_extended_basis[inds_sort[ind_add]]
+        os         = explored_extended_basis[ind_exp_os]
+        if os not in basis and ind_exp_os != ind_identity:
             basis     += os
             num_added += 1
         ind_add += 1

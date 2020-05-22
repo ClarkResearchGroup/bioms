@@ -11,7 +11,7 @@ import scipy.sparse.linalg as ssla
 
 import qosy as qy
 
-from bioms.tools import arg, print_operator, build_s_constants, build_l_matrix, expand_com, expand_anticom, compute_overlap_inds, project_vector, project, get_size, finite_diff_gradient, finite_diff_hessian
+from bioms.tools import arg, print_operator, build_s_constants, build_l_matrix, find_local_H, expand_com, expand_anticom, compute_overlap_inds, project_vector, project, get_size, finite_diff_gradient, finite_diff_hessian
 
 # Print info about memory usage.
 def print_memory_usage():
@@ -27,7 +27,17 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
        and should approximately commute with H and approximately square
        to identity.
 
-       ...
+       Note
+       ----
+       Internally, this function assumes that explored_basis, explored_extended_basis, 
+       explored_com_data, and explored_anticom_data are never reset in between basis
+       expansions. If it is, this will probably break something. A reset will at least
+       cause the basis_inds stored in results_data to not properly correspond to the
+       OperatorStrings in explored_basis and so will result in corrupted output files.
+
+       It is OK to reset the "explored" variables *after* find_binary_iom() is called,
+       but not while it is still executing. In this case, *all* of the variables should
+       be reset together.
     """
     
     if args is None:
@@ -42,6 +52,8 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
     # saved so far in the calculation. Used as a look-up table.
     if ('explored_basis' not in args) or (args['explored_basis'] is None):
         args['explored_basis'] = qy.Basis()
+    if ('explored_extended_basis' not in args) or (args['explored_extended_basis'] is None):
+        args['explored_extended_basis'] = qy.Basis()
     if ('explored_com_data' not in args) or (args['explored_com_data'] is None):
         args['explored_com_data'] = dict()
     if ('explored_anticom_data' not in args) or (args['explored_anticom_data'] is None):
@@ -110,11 +122,12 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
     com_norm = None
     binarity = None
     obj_val  = None
-    com_residual           = None
-    anticom_residual       = None
-    extended_basis_anticom = None
-    s_constants_anticom    = None # The current (anti-commuting) structure constants for the basis.
-    iteration_data         = None
+    com_residual                = None
+    anticom_residual            = None
+    inds_extended_basis_anticom = None
+    ind_identity_anticom        = None # The index of the identity OperatorString in extended_basis_anticom.
+    s_constants_anticom         = None # The current (anti-commuting) structure constants for the basis.
+    iteration_data              = None
 
     # Returns the iteration data
     # needed by obj, grad_obj, and hess_obj
@@ -122,12 +135,12 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
     def updated_iteration_data(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, iteration_data, extended_basis_anticom, args, s_constants_anticom
+        nonlocal basis, iteration_data, inds_extended_basis_anticom, args, s_constants_anticom
         
         if iteration_data is not None and np.allclose(y, iteration_data[0], atol=1e-14):
             return iteration_data
         else:
-            Lbar_tau       = build_l_matrix(s_constants_anticom, y, basis, extended_basis_anticom)
+            Lbar_tau       = build_l_matrix(s_constants_anticom, y, basis, inds_extended_basis_anticom)
             iteration_data = [np.copy(y), Lbar_tau]
             
             return iteration_data
@@ -135,17 +148,15 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
     def obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, L_H, com_norm, binarity, obj_val, com_residual, anticom_residual, extended_basis_anticom, identity, _check_quantities
+        nonlocal basis, L_H, com_norm, binarity, obj_val, com_residual, anticom_residual, inds_extended_basis_anticom, ind_identity_anticom, identity, _check_quantities
         
         com_residual = L_H.dot(y)
         com_norm     = nla.norm(com_residual)**2.0
         
         [_, Lbar_tau] = updated_iteration_data(y)
         
-        ind_identity = extended_basis_anticom.index(identity)
-        
         anticom_residual = 0.5 * Lbar_tau.dot(y)
-        anticom_residual[ind_identity] -= 1.0
+        anticom_residual[ind_identity_anticom] -= 1.0
         binarity = nla.norm(anticom_residual)**2.0
         
         # For debugging, check that commutator norm and binarity are correct:
@@ -155,6 +166,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
             com_norm_check = qy.commutator(H, optest).norm() ** 2.0
             optest_sqr     = 0.5 * qy.anticommutator(optest, optest)
             binarity_check = (optest_sqr - id_op).norm() ** 2.0
+            
             print('com_norm = {}, com_norm_check = {}'.format(com_norm, com_norm_check), flush=True)
             print('binarity = {}, binarity_check = {}'.format(binarity, binarity_check), flush=True)
             
@@ -162,6 +174,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
             # agrees with what a brute-force calculation (qosy) thinks is O^2-I.
 
             # Check that they include the same operator strings.
+            extended_basis_anticom = qy.Basis([args['explored_extended_basis'][ind_exp] for ind_exp in inds_extended_basis_anticom])
             check_os = True
             for (_, os_) in optest_sqr:
                 if os_ not in extended_basis_anticom:
@@ -198,13 +211,12 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
     def grad_obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, C_H, extended_basis_anticom, identity, _check_derivatives, _checked_grad
+        nonlocal basis, C_H, inds_extended_basis_anticom, ind_identity_anticom, identity, _check_derivatives, _checked_grad
         
         [_, Lbar_tau] = updated_iteration_data(y)
         
-        ind_identity = extended_basis_anticom.index(identity)
-        Lbar_vec     = Lbar_tau[ind_identity, :]
-        Lbar_vec     = Lbar_vec.real
+        Lbar_vec = Lbar_tau[ind_identity_anticom, :]
+        Lbar_vec = Lbar_vec.real
 
         grad_obj = coeff_com_norm * (2.0 * C_H.dot(y)) \
                    + coeff_binarity * ((Lbar_tau.H).dot(Lbar_tau.dot(y)) - 2.0 * Lbar_vec)
@@ -229,7 +241,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
     def hess_obj(y):
         # Nonlocal variables that will be used or
         # modified in this function.
-        nonlocal basis, C_H, args, extended_basis_anticom, identity, _check_derivatives, _checked_hess, s_constants_anticom
+        nonlocal basis, C_H, args, inds_extended_basis_anticom, ind_identity_anticom, identity, _check_derivatives, _checked_hess, s_constants_anticom
         
         #explored_s_constants = args['explored_anticom_data']
         
@@ -243,7 +255,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
         hess_obj += coeff_binarity * (2.0 * Cbar_tau)
         
         # The index in the extended basis of the identity operator.
-        ind_identity = extended_basis_anticom.index(identity)
+        #ind_identity_anticom
         
         # Vector representation of {\\tau, \\tau} in the extended basis.
         Lbar_vec = Lbar_tau.dot(y)
@@ -255,7 +267,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
         for (indB, indC, indA, coeffC) in zip(*s_constants_anticom):
             terms[indB, indA] += coeffC * np.conj(Lbar_vec[indC])
 
-            if indC == ind_identity:
+            if indC == ind_identity_anticom:
                 terms[indB, indA] += -2.0 * np.conj(coeffC)
         
         # The final terms added to the Hessian.
@@ -334,9 +346,18 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
         
         ### Compute the relevant quantities in the current basis.
 
+        # Use only the local part of the Hamiltonian if possible (using Pauli strings).
+        if global_op_type == 'Pauli':
+            # Consider only the terms in H that have spatial overlap
+            # with the current basis, so that you do not waste
+            # time and memory considering commutators between far away Pauli strings.
+            H_local = find_local_H(basis, H)
+        else:
+            H_local = H
+        
         # The commutant matrix C_H is computed once in each expansion.
-        [s_constants_com, extended_basis_com] = build_s_constants(basis, H._basis, args['explored_basis'], args['explored_com_data'], operation_mode='commutator')
-        L_H = build_l_matrix(s_constants_com, H, basis, extended_basis_com)
+        [s_constants_com, inds_extended_basis_com, _] = build_s_constants(basis, H_local._basis, args['explored_basis'], args['explored_extended_basis'], args['explored_com_data'], operation_mode='commutator')
+        L_H = build_l_matrix(s_constants_com, H_local, basis, inds_extended_basis_com)
         C_H = (L_H.H).dot(L_H)
         C_H = C_H.real
 
@@ -344,12 +365,37 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
         # But the Liouvillian matrix (L_H)_{ca} = \sum_b J_b \bar{f}_{ba}^c
         # (and the anti-commutant matrix C_H = (L_H)^\dagger L_H) are computed many times
         # from the structure constants.
-        [s_constants_anticom, extended_basis_anticom] = build_s_constants(basis, basis, args['explored_basis'], args['explored_anticom_data'], operation_mode='anticommutator')
+        [s_constants_anticom, inds_extended_basis_anticom, ind_identity_anticom] = build_s_constants(basis, basis, args['explored_basis'], args['explored_extended_basis'], args['explored_anticom_data'], operation_mode='anticommutator')
         
         basis_inds_in_explored_basis = np.array([args['explored_basis'].index(os_b) for os_b in basis], dtype=int)
         basis_inds.append(basis_inds_in_explored_basis)
 
         basis_sizes.append(len(basis))
+
+        # For debugging memory usage:
+        """
+        if verbose:
+            vars_to_examine = [('args', args),
+                               ('explored_anticom_data', args['explored_anticom_data']),
+                               ('explored_com_data', args['explored_com_data']),
+                               ('explored_extended_basis', args['explored_extended_basis']),
+                               ('explored_basis', args['explored_basis']),
+                               ('s_constants_anticom', s_constants_anticom),
+                               ('s_constants_com', s_constants_com),
+                               ('iteration_data', iteration_data),
+                               ('L_H', L_H),
+                               ('C_H', C_H),
+                               ('anticom_residual', anticom_residual),
+                               ('com_residual', com_residual),
+                               ('inds_extended_basis_anticom', inds_extended_basis_anticom),
+                               ('inds_extended_basis_com', inds_extended_basis_com)]
+            for (var_name, var) in vars_to_examine:
+                print('Size of {} is {} GB'.format(var_name, get_size(var)/1e9))
+
+            #print('EXPLORED COM DATA:')
+            #for key in args['explored_com_data']:
+            #    print('{} : {}'.format(key, args['explored_com_data'][key]))
+        """
 
         ### Minimize the objective function.
         options    = {'maxiter' : 1000, 'disp' : verbose, 'xtol' : xtol}
@@ -365,20 +411,21 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
             old_basis = copy.deepcopy(basis)
             
             # Expand by [H, [H, \tau]]
-            expand_com(H, com_residual, extended_basis_com, basis, dbasis//2, args['explored_basis'], args['explored_com_data'], truncation_size=truncation_size, verbose=verbose)
+            expand_com(H, com_residual, inds_extended_basis_com, basis, dbasis//2, args['explored_basis'], args['explored_extended_basis'], args['explored_com_data'], truncation_size=truncation_size, verbose=verbose)
             
             # Expand by \{\tau, \tau\}
             if verbose:
-                print('|Basis of \\tau^2|             = {}'.format(len(extended_basis_anticom)), flush=True)
+                print('|Basis of \\tau^2|             = {}'.format(len(inds_extended_basis_anticom)), flush=True)
             
-            expand_anticom(anticom_residual, extended_basis_anticom, basis, dbasis//2)
+            expand_anticom(anticom_residual, inds_extended_basis_anticom, basis, dbasis//2, args['explored_extended_basis'])
             
             # Project onto the new basis.
             tau = project(basis, qy.Operator(taus[-1], old_basis))
             tau = tau.coeffs.real / nla.norm(tau.coeffs.real)
 
         if verbose:
-            print('|Explored Basis|              = {}'.format(len(args['explored_basis'])), flush=True)
+            print('|Explored basis|              = {}'.format(len(args['explored_basis'])), flush=True)
+            print('|Explored extended basis|     = {}'.format(len(args['explored_extended_basis'])), flush=True)
             
         if verbose and ind_expansion != num_expansions-1:
             print('\\tau = ', flush=True)
@@ -492,7 +539,7 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
         # and anticommutation data, just the explored basis.
         args_to_record = dict()
         for key in args:
-            if key not in ['explored_com_data', 'explored_anticom_data']:
+            if key not in ['explored_com_data', 'explored_anticom_data', 'explored_extended_basis']:
                 args_to_record[key] = args[key]
         
         data         = [args_to_record, results_data]
