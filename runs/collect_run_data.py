@@ -414,6 +414,8 @@ def exp_fit(weights, L, lattice_type):
         
         ind0 = np.argmax(y)
         x0   = x[ind0]
+
+        site0 = x0
         
         # The exponential function to fit.
         def func(x, a):
@@ -527,8 +529,9 @@ def exp_fit(weights, L, lattice_type):
     else:
         raise ValueError('Invalid lattice_type: {}'.format(lattice_type))
     
-    
-    return [popt, pcov]
+
+    # Return the optimized fitting parameters, its variance, and the localtion of the l-bit center.
+    return [popt, pcov, site0]
     
 # Keep a list of dicts to transform into a pandas
 # DataFrame later.
@@ -609,11 +612,6 @@ for folder in folders:
             inds_explored_basis = results_data['basis_inds'][ind_expansion]
             op_strings          = [explored_basis[ind_os] for ind_os in inds_explored_basis]
             operator            = qy.Operator(coeffs, op_strings)
-
-            # |<\tau^z_i, \sigma^z_i>|^2
-            Z_center         = qy.opstring('Z {}'.format(N//2))
-            ind_Z_center     = operator._basis.index(Z_center)
-            coeff_sqr_center = np.abs(operator.coeffs[ind_Z_center])**2.0
             
             # The weights \sum_i |c_i|^2 of the operator on each site i.
             weights = operator_weights(operator, N)
@@ -679,24 +677,24 @@ for folder in folders:
                 range_dict[range_type+'_range'] = operator_range(operator, L, lattice_type, range_type)
             
             # Find an exponential fit of the weights.
-            [opt_params, opt_covs] = exp_fit(weights, L, lattice_type)
-            corr_length            = opt_params[0]
-            corr_length_err        = np.sqrt(np.abs(opt_covs[0,0]))
+            [opt_params, opt_covs, center_site] = exp_fit(weights, L, lattice_type)
+            corr_length                         = opt_params[0]
+            corr_length_err                     = np.sqrt(np.abs(opt_covs[0,0]))
 
             # Find an exponential fit of the weights_z.
-            [opt_params_z, opt_covs_z] = exp_fit(weights_z, L, lattice_type)
-            corr_length_z              = opt_params_z[0]
-            corr_length_z_err          = np.sqrt(np.abs(opt_covs_z[0,0]))
+            [opt_params_z, opt_covs_z, center_site_z] = exp_fit(weights_z, L, lattice_type)
+            corr_length_z                             = opt_params_z[0]
+            corr_length_z_err                         = np.sqrt(np.abs(opt_covs_z[0,0]))
 
             # Find an exponential fit of the weights_abs.
-            [opt_params_abs, opt_covs_abs] = exp_fit(weights_abs, L, lattice_type)
-            corr_length_abs               = opt_params_abs[0]
-            corr_length_abs_err           = np.sqrt(np.abs(opt_covs_abs[0,0]))
+            [opt_params_abs, opt_covs_abs, _] = exp_fit(weights_abs, L, lattice_type)
+            corr_length_abs                   = opt_params_abs[0]
+            corr_length_abs_err               = np.sqrt(np.abs(opt_covs_abs[0,0]))
 
             # Find an exponential fit of the weights_z_abs.
-            [opt_params_z_abs, opt_covs_z_abs] = exp_fit(weights_z_abs, L, lattice_type)
-            corr_length_z_abs                 = opt_params_z_abs[0]
-            corr_length_z_abs_err             = np.sqrt(np.abs(opt_covs_z_abs[0,0]))
+            [opt_params_z_abs, opt_covs_z_abs, _] = exp_fit(weights_z_abs, L, lattice_type)
+            corr_length_z_abs                     = opt_params_z_abs[0]
+            corr_length_z_abs_err                 = np.sqrt(np.abs(opt_covs_z_abs[0,0]))
             
             # Find an exponential fit of the (normalized) amp_ranges.
             #[opt_params_amp_ranges, opt_covs_amp_ranges] = exp_fit(amp_ranges / amp_ranges.sum(), L, lattice_type)
@@ -707,7 +705,15 @@ for folder in folders:
             #[opt_params_amp_ranges_l1, opt_covs_amp_ranges_l1] = exp_fit(amp_ranges_l1 / amp_ranges_l1.sum(), L, lattice_type)
             #corr_length_amp_ranges_l1                          = opt_params_amp_ranges_l1[0]
             #corr_length_amp_ranges_l1_err                      = np.sqrt(np.abs(opt_covs_amp_ranges_l1[0,0]))
-            
+
+            # |<\tau^z_i, \sigma^z_i>|^2
+            try:
+                Z_center         = qy.opstring('Z {}'.format(N//2))
+                ind_Z_center     = operator._basis.index(center_site) # Use the l-bit center found from where the weight is maximized.
+                coeff_sqr_center = np.abs(operator.coeffs[ind_Z_center])**2.0
+            except:
+                coeff_sqr_center = np.nan
+                
             # The histogram of the amplitudes of the operator on each operator string.
             (coeff_hist, bin_edges) = np.histogram(-np.log(np.abs(coeffs)+1e-16)/np.log(10.0), bins = np.linspace(0.0, 16.0, 17))
             
@@ -730,6 +736,8 @@ for folder in folders:
                 'tau_norm'              : results_data['tau_norms'][ind_tau], \
                 'obj'                   : results_data['objs'][ind_tau], \
                 'coeff_sqr_center'      : coeff_sqr_center, \
+                'center_site'           : center_site,
+                'center_site_z'         : center_site_z,
                 'op_ipr'                : op_ipr, \
                 'op_ipr_z'              : op_ipr_z, \
                 'op_ipr_abs'            : op_ipr_abs, \
