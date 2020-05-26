@@ -708,8 +708,8 @@ for folder in folders:
 
             # |<\tau^z_i, \sigma^z_i>|^2
             try:
-                Z_center         = qy.opstring('Z {}'.format(N//2))
-                ind_Z_center     = operator._basis.index(center_site) # Use the l-bit center found from where the weight is maximized.
+                Z_center         = qy.opstring('Z {}'.format(center_site))
+                ind_Z_center     = operator._basis.index(Z_center) # Use the l-bit center found from where the weight is maximized.
                 coeff_sqr_center = np.abs(operator.coeffs[ind_Z_center])**2.0
             except:
                 coeff_sqr_center = np.nan
