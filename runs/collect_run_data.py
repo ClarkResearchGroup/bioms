@@ -736,8 +736,8 @@ for folder in folders:
                 'tau_norm'              : results_data['tau_norms'][ind_tau], \
                 'obj'                   : results_data['objs'][ind_tau], \
                 'coeff_sqr_center'      : coeff_sqr_center, \
-                'center_site'           : center_site,
-                'center_site_z'         : center_site_z,
+                'center_site'           : center_site, \
+                'center_site_z'         : center_site_z, \
                 'op_ipr'                : op_ipr, \
                 'op_ipr_z'              : op_ipr_z, \
                 'op_ipr_abs'            : op_ipr_abs, \

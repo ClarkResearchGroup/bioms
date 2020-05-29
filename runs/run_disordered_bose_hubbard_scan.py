@@ -22,6 +22,7 @@ import optparse
 import json
 import numpy as np
 import random
+import pickle
 
 import qosy as qy
 
@@ -132,9 +133,26 @@ for ind_sample in range(num_samples):
         
         # Skip this calculation if it has already been performed.
         if os.path.isfile(args['results_filename']):
-            print('Skipping calculation since it has already been done!', flush=True)
-            ind_file += 1
-            continue
+            # Check if the file is a valid pickled file that can be read.
+            # If the pickled file is corrupted (because it was not fully written
+            # when the program crashed), then it would be missing an EOF character
+            # and produce an error when read.
+            correctly_pickled = True
+            try:
+                datafile = open(args['results_filename'], 'rb')
+                data     = pickle.load(datafile)
+                datafile.close()
+                del data
+            except:
+                correctly_pickled = False
+                print('The pickled file {} was corrupted and could not be read. Calculation is being redone.'.format(args['results_filename']), flush=True)
+                
+            # Only if the file was correctly pickled then you can safely go
+            # to the next calculation.
+            if correctly_pickled:
+                print('Skipping calculation since it has already been done!', flush=True)
+                ind_file += 1
+                continue
         
         # The Heisenberg chain.
         if ham_type == '2D':
