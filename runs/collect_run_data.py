@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import qosy as qy
 
 import bioms
-from bioms.tools import get_size
+from bioms.tools import compute_overlap_inds, get_size
 
 tol = 1e-10
 
@@ -584,8 +584,10 @@ for folder in folders:
         taus                       = results_data['taus']
         num_taus_in_expansion      = results_data['num_taus_in_expansion']
         ind_expansion_from_ind_tau = results_data['ind_expansion_from_ind_tau']
-        
-        num_taus = len(taus)
+
+        prev_tau_vector = None
+        prev_tau_inds   = None
+        num_taus        = len(taus)
         for ind_tau in range(num_taus):
 
             # Report whether this operator is the final
@@ -612,6 +614,20 @@ for folder in folders:
             inds_explored_basis = results_data['basis_inds'][ind_expansion]
             op_strings          = [explored_basis[ind_os] for ind_os in inds_explored_basis]
             operator            = qy.Operator(coeffs, op_strings)
+
+            # Compute the overlap with the previously considered tau operator
+            # (which will be the converged tau operator from the previous
+            #  expansion if record_only_converged is set to True).
+            tau_vector = coeffs
+            tau_inds   = inds_explored_basis
+            if prev_tau_vector is not None:
+                expansion_overlap  = compute_overlap_inds(prev_tau_vector, prev_tau_inds,
+                                                          tau_vector, tau_inds)
+                expansion_fidelity = np.abs(expansion_overlap)**2.0
+            else:
+                expansion_fidelity = np.nan
+            prev_tau_vector = np.copy(tau_vector)
+            prev_tau_inds   = np.copy(tau_inds)
             
             # The weights \sum_i |c_i|^2 of the operator on each site i.
             weights = operator_weights(operator, N)
@@ -749,6 +765,7 @@ for folder in folders:
                 'initial_fidelity'      : results_data['initial_fidelities'][ind_tau], \
                 'final_fidelity'        : results_data['final_fidelities'][ind_tau], \
                 'proj_final_fidelity'   : proj_final_fidelity, \
+                'expansion_fidelity'    : expansion_fidelity, \
                 'basis_size'            : results_data['basis_sizes'][ind_expansion], \
                 'weights'               : weights, \
                 'weights_z'             : weights_z, \
