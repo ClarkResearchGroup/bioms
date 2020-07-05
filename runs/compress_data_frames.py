@@ -1,5 +1,7 @@
-# Saves compacted version of the pandas data frames that only contains
-# the numbers (ranges, comnorms, etc) and not the arrays (weights, localities, etc).
+"""
+Saves compressed versions of the pandas data frames that only contain
+numbers (ranges, comnorms, etc) and not the arrays (weights, localities, etc).
+"""
 
 import time
 import numpy as np
@@ -47,16 +49,16 @@ def corr_length_2pt(weights):
 output_folder = 'compressed_data/'
 
 # Folder where the run files are read from.
-input_folder = '' #'/media/echertkov/My Passport/Research/runs/forward_problems/lbits/'
+input_folder = '' # <-------------------------------------------------- SPECIFY THIS
 
 # The run files whose data to save.
 # Lists of files while have their data combined.
-run_files = [['output_run1D_heisenberg1'],
+run_files = [['output_run1D_heisenberg1'], 
              ['output_run2D_heisenberg1'],
              ['output_run3D_heisenberg1'],
-             ['output_run2D_bosehubbard1']]
+             ['output_run2D_bosehubbard1']] # <-------------------------------------------------- SPECIFY THIS
 
-run_names = ['heisenberg1D', 'heisenberg2D', 'heisenberg3D', 'bosehubbard2D']
+run_names = ['heisenberg1D', 'heisenberg2D', 'heisenberg3D', 'bosehubbard2D'] # <-------------------------------------------------- SPECIFY THIS
 
 extra_filename_suffix = ''
 

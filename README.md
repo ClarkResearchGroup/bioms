@@ -2,9 +2,15 @@
 
 BIOMS is a small python package for constructing quantum operators that are approximate binary integrals of motion. It is built on top of the [QOSY python package](https://github.com/ClarkResearchGroup/qosy).
 
+We used BIOMS to study many-body localization (MBL) in one, two, and three-dimensions by finding binary integrals of motion known as "localized bits", or l-bits [1].
+
 ## Features
 
 BIOMS implements a heuristic algorithm that takes as input an operator H (such as a Hamiltonian) and produces as output an operator O that minimizes the sum of the binarity |O^2 - I|^2 and the commutator norm |[H, O]|^2.
+
+The `bioms` folder contains our implementation of the algorithm.
+
+The `runs` folder contains our code for using BIOMS to find approximate l-bits in 1D, 2D, and 3D systems.
 
 ## Getting Started
 
@@ -48,10 +54,10 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fo
 
 ## References
 
-BIOMS is introduced in the following study of many-body localization in greater than one dimensions:
+BIOMS is introduced in the following study of MBL in greater than one dimensions:
 
-...
+[1] ...
 
 Qosy is based on work presented in
 
-E. Chertkov, B. Villalonga, and B. K. Clark, “Engineering Topological Models with a General-Purpose Symmetry-to-Hamiltonian Approach,” [arXiv:1910.10165](http://arxiv.org/abs/1910.10165) (2019).
+[2] [E. Chertkov, B. Villalonga, and B. K. Clark, “Engineering Topological Models with a General-Purpose Symmetry-to-Hamiltonian Approach,” Phys. Rev. Research 2, 023348 (2020).](https://doi.org/10.1103/PhysRevResearch.2.023348)

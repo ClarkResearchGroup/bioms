@@ -1,7 +1,35 @@
 import qosy as qy
 
-# TODO: document
 def single_site_parity(site, num_orbitals, mode=None):
+    """Create a single Z_i operator at the given site
+    (or I-2N_i in terms of fermionic operators).
+
+    Parameters
+    ----------
+    site : int
+         The site i.
+    num_orbitals : int
+         The number of orbitals N to consider.
+    mode : str, optional
+         The basis B of OperatorStrings to use to
+         represent the operator Z_i in. "constant"
+         uses B={Z_i}. "linear" uses B={Z_j}_{j=1}^N.
+         "quadratic" uses B={A_i B_j}_{i<=j=1}^N
+         where A_i, B_j are Majorana fermions. 
+         Defaults to "constant".
+
+    Returns
+    -------
+    qosy.Operator
+        The Z_i operator.
+
+    Note
+    ----
+    This returns an Operator that is a sum of Majorana strings
+    to accomodate different initializations. This can be converted
+    to a sum of Pauli strings using qosy.convert().
+    """
+
     if mode is None:
         mode = 'constant'
     
