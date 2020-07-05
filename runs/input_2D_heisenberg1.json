@@ -3,9 +3,10 @@
     "ham_type"       : "2D_Heisenberg",
     "periodic"       : true,
     "start_mode"     : "constant",
-    "Ws"             : [5.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
+    "Ws"             : [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 35.0, 40.0, 45.0, 50.0, 60.0, 80.0, 100.0, 150.0, 200.0, 360.0, 600.0, 1000.0],
     "num_samples"    : 1,
-    "folder"         : "run2D_constant",
+    "folder"         : "run2D_heisenberg1",
+    "out_name"       : "out.txt",
 
     "dbasis"         : 200,
     "truncation_size": 2000,
@@ -14,7 +15,7 @@
     "coeff_com_norm" : 1.0,
     "coeff_binarity" : 1.0,
     "global_op_type" : "Pauli",
-
-    "percent_mem_threshold" : 94.0,
+    
+    "percent_mem_threshold" : 96.0,
     "verbose"               : true
 }

@@ -1,8 +1,31 @@
 import numpy as np
 import qosy as qy
 
-# TODO: document
 def xxz_chain(L, J_xy, J_z, periodic=False):
+    """Construct a 1D XXZ Hamiltonian H = 1/4 \sum_<ij> [J_xy (X_i X_j + Y_i Y_j) + J_z Z_i Z_j]
+    
+    Parameters
+    ----------
+    L : int
+        The length of the chain.
+    J_xy : float
+        The coefficient in front of the exchange term.
+    J_z : float
+        The coefficient in front of the Ising term.
+    periodic : bool, optional
+        Specifies whether the model is periodic. Defaults to False.
+    
+    Returns
+    -------
+    qosy.Operator
+        The Hamiltonian.
+    
+    Examples
+    --------
+    Build a 5-site Heisenberg chain:
+        >>> H = xxz_chain(5, 1.0, 1.0)
+    """
+    
     coeffs     = []
     op_strings = []
     for site in range(L):
@@ -24,8 +47,31 @@ def xxz_chain(L, J_xy, J_z, periodic=False):
     
     return H
 
-# TODO: document
 def xxz_square(L, J_xy, J_z, periodic=False):
+    """Construct a 2D square-lattice XXZ Hamiltonian H = 1/4 \\sum_<ij> [J_xy (X_i X_j + Y_i Y_j) + J_z Z_i Z_j]
+    
+    Parameters
+    ----------
+    L : int
+        The side-length of the square.
+    J_xy : float
+        The coefficient in front of the exchange term.
+    J_z : float
+        The coefficient in front of the Ising term.
+    periodic : bool, optional
+        Specifies whether the model is periodic. Defaults to False.
+    
+    Returns
+    -------
+    qosy.Operator
+        The Hamiltonian.
+    
+    Examples
+    --------
+    Build a 5x5 2D Heisenberg model:
+        >>> H = xxz_square(5, 1.0, 1.0)
+    """
+    
     Lx = L
     Ly = L
     N  = Lx*Ly
@@ -66,8 +112,31 @@ def xxz_square(L, J_xy, J_z, periodic=False):
     
     return H
 
-# TODO: document
 def xxz_cubic(L, J_xy, J_z, periodic=False):
+    """Construct a 3D cubic-lattice XXZ Hamiltonian H = 1/4 \\sum_<ij> [J_xy (X_i X_j + Y_i Y_j) + J_z Z_i Z_j]
+    
+    Parameters
+    ----------
+    L : int
+        The side-length of the cubic lattice.
+    J_xy : float
+        The coefficient in front of the exchange term.
+    J_z : float
+        The coefficient in front of the Ising term.
+    periodic : bool, optional
+        Specifies whether the model is periodic. Defaults to False.
+    
+    Returns
+    -------
+    qosy.Operator
+        The Hamiltonian.
+    
+    Examples
+    --------
+    Build a 5x5x5 3D Heisenberg model:
+        >>> H = xxz_cubic(5, 1.0, 1.0)
+    """
+    
     Lx = L
     Ly = L
     Lz = L
@@ -113,8 +182,29 @@ def xxz_cubic(L, J_xy, J_z, periodic=False):
     
     return H
 
-# TODO: document
 def bose_hubbard_square(L, periodic=False):
+    """Construct a 2D square-lattice hard-core Bose-Hubbard Hamiltonian (without magnetic fields), 
+    which when written in terms of spin operators is an XX-model of the form:
+        H = -1/2 \\sum_<ij> (X_i X_j + Y_i Y_j)
+    
+    Parameters
+    ----------
+    L : int
+        The side-length of the square.
+    periodic : bool, optional
+        Specifies whether the model is periodic. Defaults to False.
+    
+    Returns
+    -------
+    qosy.Operator
+        The Hamiltonian.
+    
+    Examples
+    --------
+    Build a 5x5 2D hard-core Bose-Hubbard model:
+        >>> H = xxz_square(5, 1.0, 1.0)
+    """
+    
     Lx = L
     Ly = L
     N  = Lx*Ly
@@ -152,8 +242,27 @@ def bose_hubbard_square(L, periodic=False):
     
     return H
 
-# TODO: document
 def magnetic_fields(potentials):
+    """Construct a magnetic fields operator H = 1/2 \\sum_j h_j Z_j from the specified potentials h_j. 
+    
+    Parameters
+    ----------
+    potentials : list or ndarray
+        The potentials h_j.
+    
+    Returns
+    -------
+    qosy.Operator
+        The Hamiltonian representing the magnetic fields.
+    
+    Examples
+    --------
+    Build a 5-site disordered Heisenberg model:
+        >>> import numpy as np
+        >>> W = 6.0 # Disorder strength
+        >>> H = xxz_square(5, 1.0, 1.0) + W * magnetic_fields(2.0*np.random.rand(5) - 1.0)
+    """
+    
     N = len(potentials)
     
     coeffs     = 0.5 * potentials
@@ -163,10 +272,23 @@ def magnetic_fields(potentials):
     
     return H
 
-# TODO: 2D Hamiltonians
-
-# TODO: document, test
 def number_ops(H, num_orbitals):
+    """Construct the number operators that diagonalize the given
+    quadratic fermionic tight-binding Hamiltonian.
+    
+    Parameters
+    ----------
+    H : qosy.Operator
+        The quadratic tight-binding Hamiltonian.
+    num_orbitals : int
+        The number of orbitals (sites) in the model.
+    
+    Returns
+    -------
+    list of qosy.Operator
+        The number operators that commute with H.
+    """
+    
     H_tb = qy.convert(H, 'Fermion')
     H_tb = H_tb.remove_zeros(tol=1e-15)
     (evals, evecs) = qy.diagonalize_quadratic_tightbinding(H_tb, num_orbitals)

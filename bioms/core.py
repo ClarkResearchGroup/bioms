@@ -27,6 +27,22 @@ def find_binary_iom(hamiltonian, initial_op, args=None, _check_derivatives=False
        and should approximately commute with H and approximately square
        to identity.
 
+       Parameters
+       ----------
+       hamiltonian : qosy.Operator
+           The Hamiltonian.
+       initial_op : qosy.Operator
+           The initial operator O. This defines the initial basis of OperatorStrings of O.
+       args : dict, optional
+           The arguments to the algorithm. Defaults to None.
+
+       Returns
+       -------
+       [tau_op, com_norm, binarity, results_data]
+           tau_op is a qosy.Operator representing the optimized binary integral of motion.
+           com_norm and binarity are its commutator norm and binarity. results_data is a 
+           dict containing additional information about the optimization.
+
        Note
        ----
        Internally, this function assumes that explored_basis, explored_extended_basis, 

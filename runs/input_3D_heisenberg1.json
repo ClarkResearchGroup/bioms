@@ -3,10 +3,10 @@
     "ham_type"       : "3D_Heisenberg",
     "periodic"       : true,
     "start_mode"     : "constant",
-    "Ws"             : [30.0, 60.0, 70.0],
+    "Ws"             : [3.0, 6.0, 8.0, 10.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 21.0, 22.0, 23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 29.0, 30.0, 31.0, 32.0, 33.0, 34.0, 35.0, 36.0, 37.0, 38.0, 39.0, 40.0, 45.0, 50.0, 60.0, 80.0, 100.0, 150.0, 200.0, 360.0, 600.0, 1000.0],
     "num_samples"    : 1,
-    "folder"         : "run3D_test6",
-    "out_name"       : "out_test.txt",
+    "folder"         : "run3D_heisenberg1",
+    "out_name"       : "out.txt",
 
     "dbasis"         : 200,
     "truncation_size": 2000,
@@ -16,6 +16,6 @@
     "coeff_binarity" : 1.0,
     "global_op_type" : "Pauli",
     
-    "percent_mem_threshold" : 85.0,
+    "percent_mem_threshold" : 96.0,
     "verbose"               : true
 }

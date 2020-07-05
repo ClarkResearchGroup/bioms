@@ -10,11 +10,25 @@ from qosy.operatorstring import opstring
 from qosy.basis          import Basis, Operator
 from qosy.algebra        import structure_constants, _operation_opstring
 
-# TODO: document
 def arg(args, arg_name, default_value):
     """Return a parameter from the dictionary
        with the given name if it is exists. Otherwise,
        return the default parameter value.
+
+    Parameters
+    ----------
+    args : dict
+        The dictionary of arguments.
+    arg_name : str
+        The name of a key in the dictionary that is being queried.
+    default_value : object
+        The default value returned for the key if it does not exist in args.
+
+    Returns
+    -------
+    object
+        The value associated to key in the dict args or default_value
+        if it doesn't exist.
     """
     
     if arg_name not in args or args[arg_name] is None:
@@ -22,12 +36,29 @@ def arg(args, arg_name, default_value):
     else:
         return args[arg_name]
 
-# TODO: document
 def compute_overlap_inds(vec1, vec1_basis_inds, vec2, vec2_basis_inds):
-    """Function to compute the overlap between two Operators,
+    """Compute the overlap between two Operators,
     whose information is provided as vectors of coefficients
     and the indices of the operator strings in the explored basis
     corresponding to those coefficients.
+
+    Parameters
+    ----------
+    vec1 : ndarray of complex
+        The vector specifying operator1.
+    vec1_basis_inds : ndarray of int
+        The indices of the Pauli strings in operator1 in the basis of Pauli strings
+        shared between operator1 and operator2.
+    vec2 : ndarray of complex
+        The vector specifying operator2.
+    vec2_basis_inds : ndarray of int
+        The indices of the Pauli strings in operator2 in the basis of Pauli strings
+        shared between operator1 and operator2.
+
+    Returns
+    -------
+    float
+        The overlap <operator1, operator2> = tr(operator1^\dagger operator2)/tr(I).
     """
     
     vec2_dict = dict()
@@ -183,6 +214,30 @@ def _build_s_constants_data(basisA, basisB, inds_basisA_to_exp, inds_basisB_to_e
 def build_s_constants(basisA, basisB, explored_basis, explored_extended_basis, explored_s_constants, operation_mode='commutator'):
     """Build the structure constants f_{ba}^c for the given bases
     using the data stored in explored_basis and explored_s_constants.
+
+    Parameters
+    ----------
+    basisA : qosy.Basis
+        The original basis.
+    basisB : qosy.Basis
+        The extended basis.
+    explored_basis : qosy.Basis
+        The basis that has already been explored.
+    explored_extended_basis : qosy.Basis
+        The extended basis that has already been explored.
+    explored_s_constants : dict of int to tuples of (float, OperatorString)
+        A dictionary storing already evaluated commutator/anticommutators between OperatorStrings.
+    operation_mode : str, optional
+        Specifies whether to compute commutators ('commutator') or anti-commutators ('anticommutator'). Defaults to 'commutator'.
+
+    Returns
+    -------
+    [s_constants_data, inds_extended_basis, ind_identity_extended_basis]
+        The first element of the list is itself a list of info that can be
+        used to create a scipy.csr_matrix. The second element is an ndarray 
+        of ints storing the indices of the OperatorStrings in the extended basis.
+        The third element is an int that is the index in the extended basis
+         corresponding to the identity OperatorString.
     """
     
     # Explore the space of OperatorStrings, starting from
@@ -190,7 +245,7 @@ def build_s_constants(basisA, basisB, explored_basis, explored_extended_basis, e
     # and explored_s_constants variables as you go.
     #
     # Notes:
-    # [S_b, S_a] = \sum_c f_{ba}^c S_c
+    # [S_b, S_a] = \\sum_c f_{ba}^c S_c
     # explored_s_constants is a dictionary mapping (b,a) to (f_{ba}^c, c)
     # where a,b,c are indices of OperatorStrings S_a, S_b, S_c in the
     # relevant explored bases.
@@ -215,11 +270,26 @@ def build_s_constants(basisA, basisB, explored_basis, explored_extended_basis, e
     
     return [s_constants_data, inds_extended_basis, ind_identity_extended_basis]
 
-# TODO: document
 def build_l_matrix(s_constants_data, op, basis, inds_extended_basis):
-    """Build the Liouvillian matrix (L_H)_{ca} = \sum_b J_b f_{ba}^c (or anti-Liouvillian matrix
+    """Build the Liouvillian matrix (L_H)_{ca} = \\sum_b J_b f_{ba}^c (or anti-Liouvillian matrix
     \\bar{L}_H) from the structure constants f_{ba}^c and the vector J_b.
     
+    
+    Parameters
+    ----------
+    s_constants_data : the same form as the first term in the output of build_s_constants()
+        The structure constants data in the current bases.
+    op : qosy.Operator or ndarray of complex
+        The operator O = \\sum_b J_b S_b (or vector J_b) with OperatorStrings S_b in basisB.
+    basis : qosy.Basis
+        The basisA with OperatorStrings S_a.
+    inds_extended_basis : qosy.Basis
+        The indices of the extended basis (basisC).
+
+    Returns
+    -------
+    scipy.csr_matrix
+        The Liouvillian matrix.
     """
     
     if isinstance(op, np.ndarray):
@@ -238,9 +308,15 @@ def build_l_matrix(s_constants_data, op, basis, inds_extended_basis):
     
     return l_matrix
 
-# TODO: document
 def print_operator(op, num_terms=20):
     """Print the largest terms of an Operator.
+    
+    Parameters
+    ----------
+    op : qosy.Operator
+        The operator to print.
+    num_terms : int, optional
+        The number of terms to print. Defaults to 20.
     """
     
     ind = 0
@@ -251,9 +327,23 @@ def print_operator(op, num_terms=20):
             print('{} {}'.format(coeff, os), flush=True)
         ind += 1
 
-# TODO: document
 def project_vector(vec1, basis_inds1, basis_inds2):
     """Project a vector into the basis of another vector.
+    
+     Parameters
+    ----------
+    vec1 : ndarray of complex, (n,)
+        The vector representing the operator in basis1.
+    basis_inds1 : ndarray of int, (n,)
+        The indices of the OperatorStrings in basis1.
+    basis_inds2 : ndarray of int, (m, )
+        The indices of the OperatorStrings in basis2.
+
+    Returns
+    -------
+    ndarray of complex, (m, )
+        The vector vec1 in basis1 projected into basis2.
+    
     """
 
     # Projects vector1 with basis_inds1 to the basis of vector2 with basis_inds2.
@@ -279,9 +369,20 @@ def project_vector(vec1, basis_inds1, basis_inds2):
 
     return proj_v1
 
-# TODO: document
 def project(basis, op):
     """Project the operator into the given basis.
+
+    Parameters
+    ----------
+    basis : qosy.Basis
+        The basis to project the operator into.
+    op : qosy.Operator
+        The operator.
+
+    Returns
+    -------
+    qosy.Operator
+        The projected Operator.
 
     Note
     ----
@@ -310,8 +411,22 @@ def find_local_H(basis, H):
     that has non-trivially commutators with the OperatorStrings
     in the given basis (because they have overlapping sites).
     Returns the local Hamiltonian Operator.
+    
+    Parameters
+    ----------
+    basis : qosy.Basis
+        The basis of local OperatorStrings to consider.
+    H : qosy.Operator
+        The full Hamiltonian, whose local part will be returned.
 
-    NOTE: This function only works for Pauli strings!
+    Returns
+    -------
+    qosy.Operator
+        The local part of the Hamiltonian.
+    
+    Note
+    ----
+    This function only works for Pauli strings!
     (It assumes that OperatorStrings with no overlapping
     sites do not commute, which is true only for Pauli strings,
     but not Majorana strings or Fermion strings.)
@@ -332,11 +447,33 @@ def find_local_H(basis, H):
     
     return H_local
 
-# TODO: document
 def expand_com(H, com_residual, inds_com_extended_basis, basis, dbasis, explored_basis, explored_extended_basis, explored_com_data, truncation_size=None, verbose=False):
     """Expand the basis by commuting with the Hamiltonian H.
     Compute [H, [H, \tau]] and add the OperatorStrings with the
     largest coefficients to the basis.
+
+    Parameters
+    ----------
+    H : qosy.Operator
+        The Hamiltonian.
+    com_residual : ndarray of complex
+        The vector form of [H, \tau].
+    inds_com_extended_basis : ndarray of int
+        The indices of the extended basis produced by [H, \tau].
+    basis : qosy.Basis
+        The basis of \tau.
+    dbasis : int
+        The maximum number of OperatorStrings to add to the basis during the expansion.
+    explored_basis : qosy.Basis
+        The already observed OperatorStrings used to represent \tau.
+    explored_extended_basis : qosy.Basis
+        The already observed OperatorStrings used to represent [H, \tau] and {\tau, \tau}.
+    explored_com_data : dict
+        The dictionary of already computed commutators between OperatorStrings.
+    truncation_size : int, optional
+        The maximum number of OperatorStrings to keep in [H, \tau]. Defaults to keep all.
+    verbose : bool, optional
+        Specifies whether to print info about the expansion. Defaults to False.
     """
     
     if verbose:
@@ -386,6 +523,19 @@ def expand_anticom(anticom_residual, inds_anticom_extended_basis, basis, dbasis,
     """Expand the basis by anticommuting with the operator O.
     Compute {O, O}/2 = O^2 and add the OperatorStrings with the
     largest coefficients to the basis.
+    
+    Parameters
+    ----------
+    anticom_residual : ndarray of complex
+        The vector form of 1/2*{\tau, \tau} - I.
+    inds_anticom_extended_basis : ndarray of int
+        The indices of the extended basis produced by 1/2*{\tau, \tau} - I.
+    basis : qosy.Basis
+        The basis of \tau.
+    dbasis : int
+        The maximum number of OperatorStrings to add to the basis during the expansion.
+    explored_extended_basis : qosy.Basis
+        The already observed OperatorStrings used to represent [H, \tau] and {\tau, \tau}.
     """
     
     identity_os  = opstring('I', op_type=basis[0].op_type)
@@ -404,10 +554,22 @@ def expand_anticom(anticom_residual, inds_anticom_extended_basis, basis, dbasis,
 
 ### Extra miscellaneous tool functions.
 
-# TODO: document
-# From https://goshippo.com/blog/measure-real-size-any-python-object/
 def get_size(obj, seen=None):
-    """Recursively finds size of objects. """
+    """Recursively find size of an object that can contain
+    many objects within it. 
+    
+    From: https://goshippo.com/blog/measure-real-size-any-python-object/
+
+    Parameters
+    ----------
+    obj : object
+        The object whose size we are measuring.
+
+    Returns
+    -------
+    int
+        Total number of bytes of data in the object.
+    """
     
     size = sys.getsizeof(obj)
     if seen is None:
@@ -427,9 +589,25 @@ def get_size(obj, seen=None):
         size += sum([get_size(i, seen) for i in obj])
     return size
 
-# Compute a finite-difference approximation
-# to a gradient, given the function.
 def finite_diff_gradient(f, x, eps=1e-6):
+    """Compute a finite-difference approximation
+    to a gradient, given the function.
+
+    Parameters
+    ----------
+    f : function
+        The function to take the gradient of.
+    x : ndarray
+        The point to evaluate the gradient at.
+    eps : float, optional
+        The step size to use in the finite-difference. Defaults to 1e-6.
+
+    Returns
+    -------
+    ndarray
+        Finite-difference gradient.
+    """
+    
     n = len(x)
     
     grad_f = np.zeros(n)
@@ -440,9 +618,26 @@ def finite_diff_gradient(f, x, eps=1e-6):
 
     return grad_f
 
-# Compute a finite-difference approximation
-# to a hessian of a function, given the gradient.
 def finite_diff_hessian(grad_f, x, eps=1e-6):
+    """Compute a finite-difference approximation
+    to a hessian of a function, given the gradient 
+    of the function.
+
+    Parameters
+    ----------
+    grad_f : function
+        The gradient of the function to take the hessian of.
+    x : ndarray
+        The point to evaluate the hessian at.
+    eps : float, optional
+        The step size to use in the finite-difference. Defaults to 1e-6.
+
+    Returns
+    -------
+    ndarray
+        Finite-difference hessian.
+    """
+    
     n = len(x)
     
     hess_f  = np.zeros((n, n))
