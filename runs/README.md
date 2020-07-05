@@ -1,4 +1,10 @@
+## Explanation of files in folder.
+
+For reference, in this folder we have included the input files used to generate the l-bit data for the 1D, 2D, and 3D disordered Heisenberg model and 2D hard-core Bose-Hubbard models from our paper. These input files are provided to the `run_disordered_heisenberg_scan.py` (or `run_disordered_bosehubbard_scan.py`) scripts to generate the data. To do this efficiently, we use MPI (which requires the mpi4py package and MPI installed on your machine).
+
 ## Workflow for generating MBL l-bit data.
+
+Our procedure for generating our data was:
 
 1. Create an `input_{run_name}.json` file, where {run_name} is replaced by the identifying name of the run.
 2. Execute a parallel run with a command like
