@@ -6,7 +6,7 @@ For reference, in this folder we have included the input files used to generate 
 
 Our procedure for generating our data was:
 
-1. Create an `input_{run_name}.json` file, where {run_name} is replaced by the identifying name of the run.
+1. Create an `input_{run_name}.json` file, where {run_name} is replaced by the identifying name of the run. For example, {run_name} could be 1D_heisenberg1.
 
 2. Execute a parallel run with a command like
 ```
@@ -24,7 +24,7 @@ again using either "aprun", "mpirun", or "mpiexec" depending on how MPI is setup
 
 5. Run a command like
 ```
-python3 combine_data_frames.py -I input_collect_run1d_heisenberg1.json -N 320
+python3 combine_data_frames.py -I input_collect_run1D_heisenberg1.json -N 320
 ```
 to combine the `output_{run_name}_{n}.p` files into a single `output_{run_name}.p` file.
 
@@ -32,7 +32,7 @@ to combine the `output_{run_name}_{n}.p` files into a single `output_{run_name}.
 ```
 python3 compress_data_frames.py
 ```
-This stores a compressed version of `output_{run_name}.p` into the folder `compressed_data`.
+This stores a compressed version of `output_{run_name}.p` into the folder `compressed_data`, which will be created if it does not exist.
 
 ## Guide for data stored in output files.
 

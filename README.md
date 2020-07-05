@@ -60,4 +60,4 @@ BIOMS is introduced in the following study of MBL in greater than one dimensions
 
 Qosy is based on work presented in
 
-[2] [E. Chertkov, B. Villalonga, and B. K. Clark, “Engineering Topological Models with a General-Purpose Symmetry-to-Hamiltonian Approach,” Phys. Rev. Research 2, 023348 (2020).](https://doi.org/10.1103/PhysRevResearch.2.023348)
+[2] E. Chertkov, B. Villalonga, and B. K. Clark, “Engineering Topological Models with a General-Purpose Symmetry-to-Hamiltonian Approach,” [Phys. Rev. Research 2, 023348 (2020)](https://doi.org/10.1103/PhysRevResearch.2.023348).
