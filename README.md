@@ -56,7 +56,7 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fo
 
 BIOMS is introduced in the following study of MBL in greater than one dimensions:
 
-[1] ...
+[1] E. Chertkov, B. Villalonga, and B. K. Clark, “Numerical evidence for many-body localization in two and three dimensions,” [arXiv:2007.02959 (2020)](https://arxiv.org/abs/2007.02959).
 
 Qosy is based on work presented in
 
